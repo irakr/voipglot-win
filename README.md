@@ -69,25 +69,45 @@ export GOOGLE_API_KEY="your-google-api-key"
 ```
 
 ### 4. Build the Application
-```bash
-cargo build --release
+
+#### **Recommended: Use the Build Script**
+
+```powershell
+# Fast development build (2-3x faster, slightly larger binary)
+./build-windows.ps1 --fast
+
+# Fastest build (skip clippy)
+./build-windows.ps1 --fast --no-clippy
+
+# Production build (most optimized, slowest)
+./build-windows.ps1
+
+# Clean build (when you suspect cache issues)
+./build-windows.ps1 --clean
 ```
+
+- The script will print the location of the generated executable.
+- For most development, use `--fast` or `--fast --no-clippy` for quick iteration.
+- For releases, use the default (no flags) for maximum optimization.
 
 ## Usage
 
 ### Basic Usage
-```bash
+```powershell
 # Run with default settings (English to Spanish)
-cargo run --release
+./target/x86_64-pc-windows-msvc/fast-release/voipglot-win.exe
+
+# Or, for production build:
+./target/x86_64-pc-windows-msvc/release/voipglot-win.exe
 
 # Run with custom languages
-cargo run --release -- --source-lang en --target-lang fr
+./target/x86_64-pc-windows-msvc/fast-release/voipglot-win.exe --source-lang en --target-lang fr
 
 # Run with custom config file
-cargo run --release -- --config my-config.toml
+./target/x86_64-pc-windows-msvc/fast-release/voipglot-win.exe --config my-config.toml
 
 # Enable debug logging
-cargo run --release -- --debug
+./target/x86_64-pc-windows-msvc/fast-release/voipglot-win.exe --debug
 ```
 
 ### Command Line Options
@@ -102,6 +122,18 @@ Edit `config.toml` to customize:
 - Translation providers
 - Processing parameters
 - API endpoints
+
+## Build Optimization Tips
+
+- **Fast development builds:** `./build-windows.ps1 --fast`
+- **Skip clippy for speed:** `./build-windows.ps1 --fast --no-clippy`
+- **Production builds:** `./build-windows.ps1` (default, optimized)
+- **Clean when needed:** `./build-windows.ps1 --clean`
+- **Dependencies are cached** for faster subsequent builds
+
+**Build speed comparison:**
+- Fast build: ~2-3x faster, slightly larger binary
+- Release build: Slowest, smallest and fastest binary
 
 ## Supported Languages
 
@@ -181,12 +213,12 @@ voipglot-win/
 ```
 
 ### Building for Development
-```bash
-# Debug build
-cargo build
+```powershell
+# Fast build
+./build-windows.ps1 --fast
 
-# Release build
-cargo build --release
+# Production build
+./build-windows.ps1
 
 # Run tests
 cargo test
@@ -221,8 +253,8 @@ cargo clippy
 
 ### Debug Mode
 Run with `--debug` flag to get detailed logging:
-```bash
-cargo run --release -- --debug
+```powershell
+./target/x86_64-pc-windows-msvc/fast-release/voipglot-win.exe --debug
 ```
 
 ## Performance Optimization
