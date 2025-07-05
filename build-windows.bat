@@ -79,4 +79,3 @@ echo 1. Install VB-CABLE Virtual Audio Device
 echo 2. Set up your API keys in environment variables
 echo 3. Configure config.toml if needed
 echo.
-pause 

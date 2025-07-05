@@ -13,7 +13,6 @@ try {
 } catch {
     Write-Host "Error: Rust is not installed or not in PATH" -ForegroundColor Red
     Write-Host "Please install Rust from https://rustup.rs/" -ForegroundColor Yellow
-    Read-Host "Press Enter to exit"
     exit 1
 }
 
@@ -26,7 +25,6 @@ if ($installedTargets -notcontains "x86_64-pc-windows-msvc") {
     rustup target add x86_64-pc-windows-msvc
     if ($LASTEXITCODE -ne 0) {
         Write-Host "Error: Failed to install Windows target" -ForegroundColor Red
-        Read-Host "Press Enter to exit"
         exit 1
     }
 } else {
@@ -66,7 +64,6 @@ Write-Host "Building release version..." -ForegroundColor Yellow
 cargo build --release --target x86_64-pc-windows-msvc
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Error: Build failed!" -ForegroundColor Red
-    Read-Host "Press Enter to exit"
     exit 1
 }
 
@@ -85,4 +82,3 @@ Write-Host "1. Install VB-CABLE Virtual Audio Device" -ForegroundColor White
 Write-Host "2. Set up your API keys in environment variables" -ForegroundColor White
 Write-Host "3. Configure config.toml if needed" -ForegroundColor White
 Write-Host ""
-Read-Host "Press Enter to exit" 

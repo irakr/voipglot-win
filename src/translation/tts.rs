@@ -1,6 +1,8 @@
 use crate::error::{Result, VoipGlotError};
 use tracing::{info, error, debug};
 use serde::{Deserialize, Serialize};
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
 
 pub struct TextToSpeech {
     language: String,
@@ -167,10 +169,10 @@ impl TextToSpeech {
         }
         
         let tts_response: GoogleTtsResponse = response.json().await
-            .map_err(|e| VoipGlotError::Serialization(e))?;
+            .map_err(|e| VoipGlotError::Network(e))?;
         
         // Decode base64 audio content
-        let audio_bytes = base64::decode(&tts_response.audio_content)
+        let audio_bytes = STANDARD.decode(&tts_response.audio_content)
             .map_err(|e| VoipGlotError::Audio(format!("Failed to decode base64 audio: {}", e)))?;
         
         // Convert audio bytes to f32 samples

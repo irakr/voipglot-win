@@ -51,11 +51,11 @@ async fn main() -> Result<()> {
     info!("Configuration loaded successfully");
     
     // Initialize audio manager
-    let audio_manager = AudioManager::new(config.audio.clone())?;
+    let mut audio_manager = AudioManager::new(config.audio.clone())?;
     info!("Audio manager initialized");
     
     // Start the audio processing pipeline
-    match run_audio_pipeline(audio_manager, args.source_lang, args.target_lang).await {
+    match run_audio_pipeline(&mut audio_manager, args.source_lang, args.target_lang).await {
         Ok(_) => {
             info!("Audio pipeline completed successfully");
             Ok(())
@@ -68,7 +68,7 @@ async fn main() -> Result<()> {
 }
 
 async fn run_audio_pipeline(
-    audio_manager: AudioManager,
+    audio_manager: &mut AudioManager,
     source_lang: String,
     target_lang: String,
 ) -> Result<()> {

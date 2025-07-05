@@ -51,4 +51,10 @@ impl From<cpal::DefaultStreamConfigError> for VoipGlotError {
     }
 }
 
+impl From<cpal::PauseStreamError> for VoipGlotError {
+    fn from(err: cpal::PauseStreamError) -> Self {
+        VoipGlotError::Audio(format!("Failed to pause audio stream: {}", err))
+    }
+}
+
 pub type Result<T> = std::result::Result<T, VoipGlotError>; 

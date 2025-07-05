@@ -81,7 +81,7 @@ impl TranslationApi {
         let url = "https://api-free.deepl.com/v2/translate";
         
         let params = [
-            ("auth_key", api_key),
+            ("auth_key", api_key.as_str()),
             ("text", text),
             ("source_lang", source_lang),
             ("target_lang", target_lang),
@@ -100,7 +100,7 @@ impl TranslationApi {
         }
         
         let translation_response: DeepLResponse = response.json().await
-            .map_err(|e| VoipGlotError::Serialization(e))?;
+            .map_err(|e| VoipGlotError::Network(e))?;
         
         Ok(translation_response.translations[0].text.clone())
     }
@@ -119,7 +119,7 @@ impl TranslationApi {
         let url = "https://translation.googleapis.com/language/translate/v2";
         
         let params = [
-            ("key", api_key),
+            ("key", api_key.as_str()),
             ("q", text),
             ("source", source_lang),
             ("target", target_lang),
@@ -138,7 +138,7 @@ impl TranslationApi {
         }
         
         let translation_response: GoogleTranslateResponse = response.json().await
-            .map_err(|e| VoipGlotError::Serialization(e))?;
+            .map_err(|e| VoipGlotError::Network(e))?;
         
         Ok(translation_response.data.translations[0].translated_text.clone())
     }
@@ -182,7 +182,7 @@ impl TranslationApi {
         }
         
         let translation_response: Vec<AzureTranslateResponse> = response.json().await
-            .map_err(|e| VoipGlotError::Serialization(e))?;
+            .map_err(|e| VoipGlotError::Network(e))?;
         
         Ok(translation_response[0].translations[0].text.clone())
     }
