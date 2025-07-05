@@ -74,13 +74,14 @@ impl AudioCapture {
         
         let config = self.build_stream_config(device)?;
         let audio_buffer = Arc::clone(&self.audio_buffer);
-        let sender = self.sender.take()
-            .ok_or_else(|| VoipGlotError::Audio("Sender already taken".to_string()))?;
+        let sender = self.sender.as_ref()
+            .ok_or_else(|| VoipGlotError::Audio("Sender not available".to_string()))?;
         
+        let sender_clone = sender.clone();
         let stream = device.build_input_stream(
             &config,
             move |data: &[f32], _: &cpal::InputCallbackInfo| {
-                Self::audio_callback(data, &audio_buffer, &sender);
+                Self::audio_callback(data, &audio_buffer, &sender_clone);
             },
             |err| {
                 error!("Audio capture error: {}", err);

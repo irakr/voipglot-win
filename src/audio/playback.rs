@@ -74,13 +74,20 @@ impl AudioPlayback {
         
         let config = self.build_stream_config(device)?;
         let audio_buffer = Arc::clone(&self.audio_buffer);
-        let sender = self.sender.take()
-            .ok_or_else(|| VoipGlotError::Audio("Sender already taken".to_string()))?;
+        
+        // Start a background task to receive audio data and add it to the buffer
+        let receiver = self.receiver.take()
+            .ok_or_else(|| VoipGlotError::Audio("Receiver already taken".to_string()))?;
+        
+        let buffer_clone = Arc::clone(&audio_buffer);
+        tokio::spawn(async move {
+            Self::audio_receiver_task(receiver, buffer_clone).await;
+        });
         
         let stream = device.build_output_stream(
             &config,
             move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
-                Self::audio_callback(data, &audio_buffer, &sender);
+                Self::audio_callback(data, &audio_buffer);
             },
             |err| {
                 error!("Audio playback error: {}", err);
@@ -93,6 +100,19 @@ impl AudioPlayback {
         
         info!("Audio playback started successfully");
         Ok(())
+    }
+
+    async fn audio_receiver_task(
+        mut receiver: mpsc::Receiver<Vec<f32>>,
+        audio_buffer: Arc<Mutex<Vec<f32>>>,
+    ) {
+        while let Some(audio_data) = receiver.recv().await {
+            let mut buffer = audio_buffer.lock().unwrap();
+            let len = audio_data.len();
+            buffer.extend(audio_data);
+            debug!("Added {} samples to playback buffer", len);
+        }
+        debug!("Audio receiver task ended");
     }
 
     fn build_stream_config(&self, device: &cpal::Device) -> Result<cpal::StreamConfig> {
@@ -121,7 +141,6 @@ impl AudioPlayback {
     fn audio_callback(
         data: &mut [f32],
         audio_buffer: &Arc<Mutex<Vec<f32>>>,
-        sender: &mpsc::Sender<Vec<f32>>,
     ) {
         let mut buffer = audio_buffer.lock().unwrap();
         
