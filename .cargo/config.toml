@@ -11,12 +11,20 @@ rustflags = [
 ]
 
 [profile.release]
-# Optimize for performance
+# Optimize for performance (slow build, fast runtime)
 opt-level = 3
 lto = true
 codegen-units = 1
 panic = "abort"
 strip = true
+
+[profile.fast-release]
+# Optimize for build speed (fast build, still good performance)
+inherits = "release"
+opt-level = 2
+lto = false
+codegen-units = 16
+strip = false
 
 [profile.dev]
 # Faster debug builds
