@@ -1,13 +1,15 @@
 pub mod stt;
 pub mod translator_api;
 pub mod tts;
+pub mod local_translator;
 
-use crate::error::{Result, VoipGlotError};
+use crate::error::Result;
 use tracing::{info, error, debug};
 
 pub use stt::SpeechToText;
 pub use translator_api::TranslationApi;
 pub use tts::TextToSpeech;
+pub use local_translator::LocalTranslator;
 
 pub struct Translator {
     source_language: String,
@@ -20,11 +22,9 @@ pub struct Translator {
 impl Translator {
     pub fn new(source_lang: String, target_lang: String) -> Result<Self> {
         info!("Initializing Translator: {} -> {}", source_lang, target_lang);
-        
         let stt = SpeechToText::new(source_lang.clone())?;
         let translator = TranslationApi::new()?;
         let tts = TextToSpeech::new(target_lang.clone())?;
-        
         Ok(Self {
             source_language: source_lang,
             target_language: target_lang,
@@ -43,7 +43,6 @@ impl Translator {
         if text.trim().is_empty() {
             return Ok(String::new());
         }
-        
         debug!("Translating text: '{}'", text);
         self.translator.translate(text, &self.source_language, &self.target_language).await
     }
@@ -52,7 +51,6 @@ impl Translator {
         if text.trim().is_empty() {
             return Ok(Vec::new());
         }
-        
         debug!("Converting text to speech: '{}'", text);
         self.tts.synthesize(text).await
     }

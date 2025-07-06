@@ -1,5 +1,5 @@
 use crate::config::AudioConfig;
-use crate::error::{Result, VoipGlotError};
+use crate::error::Result;
 use crate::translation::Translator;
 use tracing::{info, error, debug, warn};
 use std::sync::Arc;

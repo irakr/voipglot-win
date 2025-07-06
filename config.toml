@@ -13,17 +13,6 @@ latency_ms = 50       # Target latency in milliseconds
 # Translation settings
 source_language = "en"  # Source language code
 target_language = "es"  # Target language code
-stt_provider = "Whisper"  # Speech-to-Text provider: Whisper, Azure, Google
-translation_provider = "DeepL"  # Translation provider: DeepL, Google, Azure
-tts_provider = "Azure"  # Text-to-Speech provider: Azure, ElevenLabs, Google
-
-[api]
-# API keys (set via environment variables for security)
-deepl_api_key = ""  # Set VOIPGLOT_DEEPL_API_KEY environment variable
-azure_speech_key = ""  # Set VOIPGLOT_AZURE_SPEECH_KEY environment variable
-azure_region = ""  # Set VOIPGLOT_AZURE_REGION environment variable
-elevenlabs_api_key = ""  # Set VOIPGLOT_ELEVENLABS_API_KEY environment variable
-google_api_key = ""  # Set VOIPGLOT_GOOGLE_API_KEY environment variable
 
 [processing]
 # Audio processing settings

@@ -2,18 +2,12 @@
 
 ## Speech-to-Text
 - **Whisper**: Offline processing, high accuracy
-- **Azure Speech Services**: Cloud-based, real-time
-- **Google Speech-to-Text**: Cloud-based, wide language support
 
 ## Translation
-- **DeepL**: High-quality translations
-- **Google Translate**: Wide language support
-- **Azure Translator**: Microsoft's translation service
+- **Local (MarianMT)**: Offline translation, no API keys required
 
 ## Text-to-Speech
-- **Azure Speech Services**: Natural-sounding voices
-- **ElevenLabs**: High-quality, customizable voices
-- **Google Text-to-Speech**: Wide language support
+- (Your current TTS provider here, if any local/offline)
 
 # Supported Languages
 

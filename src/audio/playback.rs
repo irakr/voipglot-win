@@ -1,6 +1,6 @@
 use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
-    Sample, SampleFormat, Stream,
+    Stream,
 };
 use crate::config::AudioConfig;
 use crate::error::{Result, VoipGlotError};

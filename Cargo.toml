@@ -53,6 +53,12 @@ futures = "=0.3.30"
 base64 = "=0.22.0"
 lazy_static = "=1.4.0"
 
+# Local translation engine (MarianMT)
+rust-bert = "=0.21.0"
+tokenizers = "=0.15.0"
+tch = "=0.13.0"
+console = { version = "0.16.0", features = ["std"] }
+
 [target.'cfg(windows)'.dependencies]
 # Windows-specific audio dependencies
 windows = { version = "=0.56.0", features = [
@@ -65,4 +71,7 @@ tokio-test = "=0.4.3"
 
 [[bin]]
 name = "voipglot-win"
-path = "src/main.rs" 
+path = "src/main.rs"
+
+[dependencies.base64ct]
+version = "=1.7.3" 

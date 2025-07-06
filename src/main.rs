@@ -10,7 +10,7 @@ mod error;
 
 use audio::AudioManager;
 use config::AppConfig;
-use error::VoipGlotError;
+
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -76,6 +76,7 @@ async fn run_audio_pipeline(
     
     // Initialize translation components
     let translator = translation::Translator::new(source_lang, target_lang)?;
+    
     info!("Translation engine initialized");
     
     // Start audio capture and processing
