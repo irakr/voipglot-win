@@ -204,11 +204,41 @@ cargo --version
 # Fast release build
 .\target\x86_64-pc-windows-msvc\fast-release\voipglot-win.exe
 
+# Enable audio passthrough mode (bypasses AI processing)
+.\target\x86_64-pc-windows-msvc\release\voipglot-win.exe --passthrough
+
 # With debug logging to file (captures all output and removes ANSI color codes)
-.\target\x86_64-pc-windows-msvc\release\voipglot-win.exe --passthrough --debug *>&1 | ForEach-Object { $_ -replace '\x1b\[[0-9;]*[a-zA-Z]', '' } | Tee-Object -FilePath voipglot.log
+.\target\x86_64-pc-windows-msvc\release\voipglot-win.exe --debug *>&1 | ForEach-Object { $_ -replace '\x1b\[[0-9;]*[a-zA-Z]', '' } | Tee-Object -FilePath voipglot.log
 ```
 
 **First run** will download MarianMT models for your language pair. Subsequent runs are fully offline.
+
+### Command Line Options
+
+| Option | Description |
+|--------|-------------|
+| `--config <file>` | Configuration file path (default: config.toml) |
+| `--debug` | Enable debug logging |
+| `--source-lang <lang>` | Source language code (default: en) |
+| `--target-lang <lang>` | Target language code (default: es) |
+| `--passthrough` | Enable audio passthrough mode (bypasses AI processing) |
+
+### Audio Passthrough Mode
+
+The `--passthrough` option enables **audio passthrough mode**, which:
+
+- **Bypasses AI processing** - No speech recognition, translation, or text-to-speech
+- **Forwards microphone audio directly** to the output device
+- **Useful for testing** audio routing and device configuration
+- **Low latency** - Minimal processing overhead
+- **Perfect for debugging** audio setup issues
+
+**When to use passthrough mode:**
+- Testing if your audio devices are working correctly
+- Verifying VB-CABLE audio routing
+- Debugging audio configuration issues
+- When you want to hear your own voice without translation
+- Performance testing (no AI model loading required)
 
 ## Troubleshooting
 
