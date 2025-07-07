@@ -81,6 +81,20 @@ cargo --version
 2. Install and restart your system
 3. This creates virtual audio devices for routing audio between applications
 
+#### D. Install LLVM/Clang
+**Required for building native dependencies:** LLVM/Clang is needed for `bindgen` to generate C/C++ bindings for whisper-rs-sys.
+
+1. Download LLVM from [LLVM Releases](https://github.com/llvm/llvm-project/releases/download/llvmorg-18.1.0/LLVM-18.1.0-win64.exe)
+2. Run the installer and follow the prompts
+3. **Important:** During installation, ensure "Add LLVM to the system PATH" is checked
+4. Restart your terminal after installation
+5. Verify installation by running:
+   ```powershell
+   clang --version
+   ```
+
+**Note:** The build script will automatically detect LLVM/Clang and set the required environment variables for bindgen.
+
 ### 2. Install PyTorch 2.0.0 for Local Features
 
 **Required for core functionality:** PyTorch 2.0.0 is essential for local translation capabilities.
@@ -235,20 +249,30 @@ cargo --version
      ```
   4. If you still have issues, try reinstalling Rust using the official installer from https://rustup.rs/
 
-**4. PyTorch compilation errors**
+**4. LLVM/Clang not found (bindgen errors)**
+- If you see errors like:
+  > Unable to find libclang: "couldn't find any valid shared libraries matching: ['clang.dll', 'libclang.dll']"
+- **Solution:** Install LLVM/Clang:
+  1. Download from [LLVM Releases](https://github.com/llvm/llvm-project/releases/download/llvmorg-18.1.0/LLVM-18.1.0-win64.exe)
+  2. Run installer and ensure "Add LLVM to the system PATH" is checked
+  3. Restart your terminal
+  4. Verify: `clang --version`
+- **Alternative:** Set `LIBCLANG_PATH` environment variable to your LLVM installation directory
+
+**5. PyTorch compilation errors**
 - PyTorch 1.12.1 has known compatibility issues with newer MSVC
 - Try: `./build-windows.ps1 --no-pytorch` (API-only build)
 - Or upgrade to PyTorch 1.13.1+ for better compatibility
 
-**5. Build takes too long**
+**6. Build takes too long**
 - Use: `./build-windows.ps1 --fast` (2-3x faster)
 - Skip clippy: `./build-windows.ps1 --fast --no-clippy`
 
-**6. Dependency conflicts**
+**7. Dependency conflicts**
 - Try: `./build-windows.ps1 --clean`
 - Clear cargo cache: `cargo clean`
 
-**7. Permission errors**
+**8. Permission errors**
 - Run PowerShell as Administrator
 - Check antivirus isn't blocking the build
 

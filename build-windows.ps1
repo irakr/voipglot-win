@@ -59,6 +59,44 @@ try {
     exit 1
 }
 
+# Check if LLVM/Clang is available (required for bindgen)
+try {
+    $clangVersion = clang --version 2>&1 | Select-String "clang version"
+    if ($LASTEXITCODE -ne 0 -or -not $clangVersion) {
+        throw "LLVM/Clang not found"
+    }
+    Write-Host "LLVM/Clang found: $($clangVersion.Line.Trim())" -ForegroundColor Green
+    
+    # Set LIBCLANG_PATH for bindgen if not already set
+    if (-not $env:LIBCLANG_PATH) {
+        # Try to find LLVM installation
+        $possiblePaths = @(
+            "C:\Program Files\LLVM\bin",
+            "C:\Program Files (x86)\LLVM\bin",
+            "${env:ProgramFiles}\LLVM\bin"
+        )
+        
+        foreach ($path in $possiblePaths) {
+            if (Test-Path (Join-Path $path "libclang.dll")) {
+                $env:LIBCLANG_PATH = $path
+                Write-Host "Set LIBCLANG_PATH to: $env:LIBCLANG_PATH" -ForegroundColor Green
+                break
+            }
+        }
+    }
+} catch {
+    Write-Host "Error: LLVM/Clang is not installed or not in PATH" -ForegroundColor Red
+    Write-Host "This is required for building native dependencies (whisper-rs-sys)" -ForegroundColor Yellow
+    Write-Host "" -ForegroundColor Yellow
+    Write-Host "Solution:" -ForegroundColor Cyan
+    Write-Host "1. Download LLVM from: https://github.com/llvm/llvm-project/releases/download/llvmorg-18.1.0/LLVM-18.1.0-win64.exe" -ForegroundColor Gray
+    Write-Host "2. Run the installer and ensure 'Add LLVM to the system PATH' is checked" -ForegroundColor Gray
+    Write-Host "3. Restart your terminal and try again" -ForegroundColor Gray
+    Write-Host "" -ForegroundColor Gray
+    Write-Host "Alternative: Set LIBCLANG_PATH environment variable to your LLVM installation directory" -ForegroundColor Gray
+    exit 1
+}
+
 Write-Host "Checking toolchain..." -ForegroundColor Yellow
 
 # Check if the required target is installed (only if not already installed)
