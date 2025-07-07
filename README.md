@@ -4,9 +4,9 @@ VoipGlot is a real-time audio translation application for Windows gaming and VOI
 
 ## Features
 - Real-time audio capture and playback
-- Local speech-to-text (Whisper)
+- Local speech-to-text (Whisper via whisper-rs)
 - Local text translation (MarianMT)
-- Local text-to-speech (if available)
+- Local text-to-speech (tts crate)
 - No internet or API keys required
 - Works fully offline
 
@@ -48,9 +48,9 @@ winget install Rustlang.Rust.MSVC
 2. Install and restart your system
 3. This creates virtual audio devices for routing audio between applications
 
-### 2. Optional: Install PyTorch for Local Features
+### 2. Install PyTorch 2.0.0 for Local Features
 
-For local translation, STT, and TTS capabilities:
+**Required for core functionality:** PyTorch 2.0.0 is essential for local translation capabilities.
 
 **PyTorch Package Used:**
 - **Version:** PyTorch 2.0.0 CPU (LibTorch)
@@ -63,7 +63,18 @@ For local translation, STT, and TTS capabilities:
 3. Verify installation by checking that `C:\libtorch\lib\torch_cpu.lib` exists
 4. The build script will automatically detect and use this installation
 
-**Note:** This version is compatible with MSVC 2022 and provides the necessary libraries for local translation features.
+**Note:** This version is compatible with MSVC 2022 and provides the necessary libraries for local translation features. VoipGlot's core functionality depends on this PyTorch installation.
+
+### 3. Whisper Model for STT
+
+**Automatic download:** VoipGlot uses whisper-rs for local speech recognition and will automatically download the required Whisper model on first run.
+
+**Whisper Model:**
+- **Model:** `ggml-base.bin` (Whisper base model)
+- **Size:** ~1GB
+- **Location:** `%USERPROFILE%\.voipglot\whisper\ggml-base.bin`
+
+**Note:** The application will automatically download and install the Whisper model when you first run it. No manual download required.
 
 ## Building the Application
 
@@ -80,17 +91,6 @@ For local translation, STT, and TTS capabilities:
 1. Open **"Developer Command Prompt for VS 2022"** from Start Menu
 2. Navigate to your project directory
 3. Run: `powershell -ExecutionPolicy Bypass -File .\build-windows.ps1 --fast`
-
-### Quick Start
-```powershell
-# Open "Developer PowerShell for VS 2022" first, then:
-
-# Fast development build (recommended for first build)
-.\build-windows.ps1 --fast
-
-# Run the application
-.\target\x86_64-pc-windows-msvc\fast-release\voipglot-win.exe
-```
 
 ### Build Options
 
@@ -156,6 +156,9 @@ For local translation, STT, and TTS capabilities:
 
 # Fast release build
 .\target\x86_64-pc-windows-msvc\fast-release\voipglot-win.exe
+
+# With debug logging to file (captures all output and removes ANSI color codes)
+.\target\x86_64-pc-windows-msvc\release\voipglot-win.exe --passthrough --debug *>&1 | ForEach-Object { $_ -replace '\x1b\[[0-9;]*[a-zA-Z]', '' } | Tee-Object -FilePath voipglot.log
 ```
 
 **First run** will download MarianMT models for your language pair. Subsequent runs are fully offline.

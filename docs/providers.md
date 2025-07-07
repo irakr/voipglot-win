@@ -1,13 +1,13 @@
 # AI Providers
 
 ## Speech-to-Text
-- **Whisper**: Offline processing, high accuracy
+- **Whisper (whisper-rs)**: Offline processing, high accuracy, local speech recognition
 
 ## Translation
 - **Local (MarianMT)**: Offline translation, no API keys required
 
 ## Text-to-Speech
-- (Your current TTS provider here, if any local/offline)
+- **tts crate**: Local text-to-speech synthesis using system voices
 
 # Supported Languages
 
