@@ -57,10 +57,7 @@ tts = "0.25.0"  # Real TTS synthesis
 # Whisper STT integration
 whisper-rs = "0.11.0"  # Offline Whisper speech-to-text
 
-# Local translation engine (MarianMT)
-rust-bert = "=0.21.0"
-tokenizers = "=0.15.0"
-tch = "=0.13.0"
+# Local translation engine (Offline dictionary-based)
 console = { version = "0.16.0", features = ["std"] }
 
 [target.'cfg(windows)'.dependencies]

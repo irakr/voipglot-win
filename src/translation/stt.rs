@@ -3,11 +3,12 @@ use tracing::{info, debug, warn};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext};
 
 pub struct SpeechToText {
     language: String,
-    model_loaded: bool,
+    model_loaded: AtomicBool,
     model_path: String,
     whisper_context: Arc<Mutex<Option<WhisperContext>>>,
 }
@@ -27,7 +28,7 @@ impl SpeechToText {
         
         Ok(Self {
             language,
-            model_loaded: false,
+            model_loaded: AtomicBool::new(false),
             model_path,
             whisper_context: Arc::new(Mutex::new(None)),
         })
@@ -40,14 +41,17 @@ impl SpeechToText {
             return Ok(String::new());
         }
 
-        // Check if model is loaded
-        if !self.model_loaded {
+        // Try to load Whisper model if not loaded
+        if !self.model_loaded.load(Ordering::Relaxed) {
+            info!("Whisper model not loaded, attempting to load...");
             match self.load_whisper_model().await {
                 Ok(_) => {
+                    // Model loaded successfully, set the flag
+                    self.model_loaded.store(true, Ordering::Relaxed);
                     info!("Whisper model loaded successfully");
                 }
                 Err(e) => {
-                    debug!("Whisper model not available: {}, using fallback", e);
+                    warn!("Failed to load Whisper model: {}, using fallback", e);
                     return self.fallback_transcription(&audio_data);
                 }
             }
@@ -58,15 +62,26 @@ impl SpeechToText {
             Ok(transcription) => {
                 if !transcription.trim().is_empty() {
                     info!("Whisper transcription: '{}'", transcription);
+                    println!("\n🎤 STT RESULT: '{}'", transcription);
+                    println!("🎤 STT RESULT: '{}'", transcription);
+                    println!("🎤 STT RESULT: '{}'", transcription);
                     Ok(transcription)
                 } else {
-                    // Fall back to energy detection if Whisper returns empty
-                    self.fallback_transcription(&audio_data)
+                    warn!("Whisper returned empty transcription, using fallback");
+                    let fallback = self.fallback_transcription(&audio_data)?;
+                    println!("\n🎤 STT FALLBACK: '{}'", fallback);
+                    println!("🎤 STT FALLBACK: '{}'", fallback);
+                    println!("🎤 STT FALLBACK: '{}'", fallback);
+                    Ok(fallback)
                 }
             }
             Err(e) => {
                 warn!("Whisper transcription failed: {}, using fallback", e);
-                self.fallback_transcription(&audio_data)
+                let fallback = self.fallback_transcription(&audio_data)?;
+                println!("\n🎤 STT FALLBACK: '{}'", fallback);
+                println!("🎤 STT FALLBACK: '{}'", fallback);
+                println!("🎤 STT FALLBACK: '{}'", fallback);
+                Ok(fallback)
             }
         }
     }
@@ -101,13 +116,6 @@ impl SpeechToText {
     }
 
     async fn whisper_transcribe(&self, audio_data: &[f32]) -> Result<String> {
-        // Ensure model is loaded
-        if !self.model_loaded {
-            return Err(crate::error::VoipGlotError::Configuration(
-                "Whisper model not loaded. Please ensure model is pre-loaded before transcription.".to_string()
-            ));
-        }
-        
         // Preprocess audio
         let processed_audio = self.preprocess_audio(audio_data.to_vec());
         
@@ -116,37 +124,36 @@ impl SpeechToText {
             .iter()
             .map(|&x| (x * 32767.0) as i16)
             .collect();
-        // Convert to f32 for Whisper API
+        
+        // Use the PCM data directly for Whisper (it expects f32 but we'll convert properly)
         let pcm_data_f32: Vec<f32> = pcm_data.iter().map(|&x| x as f32 / 32767.0).collect();
         
         // Extract language code before spawning task
         let language_code = self.get_whisper_language_code().to_string();
         
-        // Verify the context is available (should be pre-loaded)
-        {
-            let ctx_guard = self.whisper_context.lock().await;
-            if ctx_guard.is_none() {
-                return Err(crate::error::VoipGlotError::Configuration(
-                    "Whisper context not initialized. Please ensure model is pre-loaded.".to_string()
-                ));
-            }
-        }
-        
         // Clone everything needed for the blocking task
         let pcm_data_f32_clone = pcm_data_f32.clone();
         let language_code_clone = language_code.clone();
         
-        // Since WhisperContext doesn't implement Clone, we need to create a new one
-        // But since the model is already loaded, this should be fast
-        let model_path = self.model_path.clone();
+        // Clone the Arc<Mutex<Option<WhisperContext>>> for the blocking task
+        let whisper_context_clone = self.whisper_context.clone();
         
         // Run inference in blocking task to avoid blocking async runtime
         let transcription = tokio::task::spawn_blocking(move || {
-            // Create a new context for this task (model is already loaded, so this is fast)
-            let ctx = WhisperContext::new_with_params(&model_path, Default::default())
-                .map_err(|e| crate::error::VoipGlotError::Configuration(
-                    format!("Failed to load Whisper model: {}", e)
-                ))?;
+            // Get the context inside the blocking task
+            let ctx_guard = whisper_context_clone.blocking_lock();
+            let ctx = ctx_guard.as_ref().ok_or_else(|| {
+                crate::error::VoipGlotError::Configuration(
+                    "Whisper context not initialized. Please ensure model is pre-loaded.".to_string()
+                )
+            })?;
+            
+            info!("Starting Whisper inference with {} samples", pcm_data_f32_clone.len());
+            
+            // Debug: Check audio levels
+            let max_audio = pcm_data_f32_clone.iter().map(|x| x.abs()).fold(0.0, f32::max);
+            let rms_audio = (pcm_data_f32_clone.iter().map(|x| x * x).sum::<f32>() / pcm_data_f32_clone.len() as f32).sqrt();
+            info!("Audio levels - Max: {:.4}, RMS: {:.4}", max_audio, rms_audio);
             
             let mut state = ctx.create_state()
                 .map_err(|e| crate::error::VoipGlotError::Api(
@@ -160,6 +167,12 @@ impl SpeechToText {
             params.set_print_progress(false);
             params.set_print_timestamps(false);
             params.set_single_segment(true);
+            // Remove restrictive filters to allow more speech detection
+            params.set_suppress_blank(false);
+            params.set_suppress_non_speech_tokens(false);
+            // Add more lenient settings
+            params.set_max_len(448); // Allow longer segments
+            params.set_max_initial_ts(1.0); // Allow initial silence
             
             state.full(params, &pcm_data_f32_clone)
                 .map_err(|e| crate::error::VoipGlotError::Api(
@@ -182,7 +195,10 @@ impl SpeechToText {
                 transcription.push(' ');
             }
             
-            Ok::<String, crate::error::VoipGlotError>(transcription.trim().to_string())
+            let result = transcription.trim().to_string();
+            info!("Whisper raw result: '{}' ({} segments)", result, num_segments);
+            
+            Ok::<String, crate::error::VoipGlotError>(result)
         }).await
         .map_err(|e| crate::error::VoipGlotError::Configuration(
             format!("Failed to spawn inference task: {}", e)
@@ -257,7 +273,7 @@ impl SpeechToText {
         // Now load the model
         info!("Loading Whisper model into memory...");
         self.load_whisper_model().await?;
-        self.model_loaded = true;
+        self.model_loaded.store(true, Ordering::Relaxed);
         info!("Whisper model loaded and ready for transcription");
         
         Ok(())
@@ -265,7 +281,7 @@ impl SpeechToText {
 
     pub async fn preload_model(&mut self) -> Result<()> {
         self.load_whisper_model().await?;
-        self.model_loaded = true;
+        self.model_loaded.store(true, Ordering::Relaxed);
         Ok(())
     }
 
@@ -305,8 +321,8 @@ impl SpeechToText {
         if rms > 0.01 {
             // This indicates speech was detected, but we don't have real transcription yet
             debug!("Speech detected (RMS: {}), but Whisper not yet integrated", rms);
-            // Return empty string to indicate no transcription available
-            Ok(String::new())
+            // Return a placeholder to indicate speech was detected
+            Ok("[Speech detected]".to_string())
         } else {
             Ok(String::new())
         }
@@ -314,7 +330,7 @@ impl SpeechToText {
 
     fn preprocess_audio(&self, audio_data: Vec<f32>) -> Vec<f32> {
         // Convert stereo to mono if needed
-        let mut mono_audio = if audio_data.len() % 2 == 0 {
+        let mono_audio = if audio_data.len() % 2 == 0 {
             // Assume stereo input
             audio_data
                 .chunks(2)
@@ -324,17 +340,47 @@ impl SpeechToText {
             audio_data
         };
         
-        // Normalize audio to prevent clipping
-        if let Some(max_val) = mono_audio.iter().map(|x| x.abs()).max_by(|a, b| a.partial_cmp(b).unwrap()) {
+        // Apply high-pass filter to remove DC offset
+        let alpha = 0.95;
+        let mut filtered = Vec::with_capacity(mono_audio.len());
+        let mut prev = 0.0;
+        
+        for &sample in &mono_audio {
+            let filtered_sample = alpha * (prev + sample - prev);
+            filtered.push(filtered_sample);
+            prev = filtered_sample;
+        }
+        
+        // Amplify audio to ensure good levels for Whisper
+        let amplification_factor = 5.0; // Increase volume by 5x
+        for sample in &mut filtered {
+            *sample *= amplification_factor;
+        }
+        
+        // Normalize audio with headroom for Whisper
+        if let Some(max_val) = filtered.iter().map(|x| x.abs()).max_by(|a, b| a.partial_cmp(b).unwrap()) {
             if max_val > 0.0 {
-                let scale = (1.0 / max_val).min(1.0);
-                for sample in &mut mono_audio {
+                let scale = (0.9 / max_val).min(1.0); // Leave 10% headroom, more aggressive normalization
+                for sample in &mut filtered {
                     *sample *= scale;
                 }
             }
         }
         
-        mono_audio
+        // Apply noise gate to remove very quiet parts (but less aggressive)
+        let noise_threshold = 0.001; // Lower threshold to preserve more audio
+        for sample in &mut filtered {
+            if sample.abs() < noise_threshold {
+                *sample = 0.0;
+            }
+        }
+        
+        // Debug: Print audio statistics
+        let max_val = filtered.iter().map(|x| x.abs()).fold(0.0, f32::max);
+        let rms_val = (filtered.iter().map(|x| x * x).sum::<f32>() / filtered.len() as f32).sqrt();
+        debug!("Preprocessed audio - Max: {:.4}, RMS: {:.4}, Length: {}", max_val, rms_val, filtered.len());
+        
+        filtered
     }
 
     fn get_whisper_language_code(&self) -> &str {

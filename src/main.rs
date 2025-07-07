@@ -51,11 +51,23 @@ async fn main() -> Result<()> {
     info!("Target language: {}", args.target_lang);
     
     // Load configuration
-    let config = AppConfig::load(&args.config)?;
+    let config = match AppConfig::load(&args.config) {
+        Ok(cfg) => cfg,
+        Err(e) => {
+            error!("Failed to load configuration: {}", e);
+            std::process::exit(1);
+        }
+    };
     info!("Configuration loaded successfully");
     
     // Initialize audio manager
-    let mut audio_manager = AudioManager::new(config.audio.clone(), config.processing.clone())?;
+    let mut audio_manager = match AudioManager::new(config.audio.clone(), config.processing.clone()) {
+        Ok(am) => am,
+        Err(e) => {
+            error!("Failed to initialize audio manager: {}", e);
+            std::process::exit(1);
+        }
+    };
     info!("Audio manager initialized");
     
     // Enable passthrough mode if requested
@@ -64,17 +76,37 @@ async fn main() -> Result<()> {
         audio_manager.enable_passthrough_mode();
     }
     
-    // Start the audio processing pipeline
-    match run_audio_pipeline(&mut audio_manager, args.source_lang, args.target_lang).await {
-        Ok(_) => {
-            info!("Audio pipeline completed successfully");
-            Ok(())
-        }
+    // Initialize translation components
+    let mut translator = match translation::Translator::new(args.source_lang.clone(), args.target_lang.clone()) {
+        Ok(t) => t,
         Err(e) => {
-            error!("Audio pipeline failed: {}", e);
-            Err(e.into())
+            error!("Failed to initialize translator: {}", e);
+            std::process::exit(1);
         }
+    };
+    
+    // Pre-initialize all AI models before starting audio processing
+    info!("Pre-initializing AI models...");
+    info!("This may take a few minutes on first run to download the Whisper model...");
+    if let Err(e) = translator.initialize_models().await {
+        error!("AI model initialization failed: {}. Cannot proceed without required models.", e);
+        std::process::exit(1);
     }
+    info!("AI models initialized successfully");
+    info!("Translation engine initialized");
+    
+    // Start the audio processing pipeline
+    if let Err(e) = audio_manager.start_processing(translator).await {
+        error!("Audio pipeline failed: {}", e);
+        std::process::exit(1);
+    }
+    info!("Audio pipeline completed successfully");
+    
+    // Keep the application running
+    tokio::signal::ctrl_c().await?;
+    info!("Received shutdown signal");
+    
+    Ok(())
 }
 
 async fn run_audio_pipeline(

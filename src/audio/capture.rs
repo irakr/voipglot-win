@@ -25,7 +25,7 @@ impl AudioCapture {
         let host = cpal::default_host();
         let device = Self::find_input_device(&host, &config)?;
         
-        let (sender, receiver) = mpsc::channel(100);
+        let (sender, receiver) = mpsc::channel(1000); // Increased buffer size
         
         Ok(Self {
             config,
@@ -128,15 +128,12 @@ impl AudioCapture {
         let mut buffer = audio_buffer.lock().unwrap();
         buffer.extend_from_slice(data);
         
-        // If we have enough samples for a chunk, send it
-        let chunk_size = 1024; // 1 second at 16kHz
-        if buffer.len() >= chunk_size {
-            let chunk: Vec<f32> = buffer.drain(..chunk_size).collect();
-            
-            // Try to send the chunk, but don't block if the receiver is slow
-            if let Err(e) = sender.try_send(chunk) {
-                debug!("Failed to send audio chunk: {}", e);
-            }
+        // Send the data immediately without buffering to reduce latency
+        let chunk: Vec<f32> = data.to_vec();
+        
+        // Try to send the chunk, but don't block if the receiver is slow
+        if let Err(e) = sender.try_send(chunk) {
+            debug!("Failed to send audio chunk: {}", e);
         }
     }
 

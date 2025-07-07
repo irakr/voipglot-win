@@ -16,7 +16,7 @@ target_language = "es"  # Target language code
 
 [processing]
 # Audio processing settings
-chunk_duration_ms = 1000  # Duration of audio chunks to process
+chunk_duration_ms = 500   # Duration of audio chunks to process (reduced for faster processing)
 silence_threshold = 0.0001  # Much lower threshold for better audio detection
 noise_reduction = true    # Enable noise reduction
 echo_cancellation = true  # Enable echo cancellation 

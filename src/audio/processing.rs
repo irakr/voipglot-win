@@ -41,7 +41,6 @@ impl AudioProcessor {
             return Ok(Some(audio_data));
         }
         
-        // Original AI processing code
         // Check if audio contains speech (not just silence)
         if !self.contains_speech(&audio_data) {
             debug!("Audio chunk contains only silence, skipping");
@@ -55,6 +54,14 @@ impl AudioProcessor {
         
         // Check if we have enough audio for processing
         let samples_needed = (self.config.sample_rate as u32 * self.chunk_duration_ms / 1000) as usize;
+        
+        // Limit buffer size to prevent overflow
+        let max_buffer_size = samples_needed * 4; // Keep max 4 chunks in buffer
+        if buffer.len() > max_buffer_size {
+            debug!("Buffer overflow detected ({} > {}), truncating", buffer.len(), max_buffer_size);
+            let excess = buffer.len() - max_buffer_size;
+            buffer.drain(..excess);
+        }
         
         if buffer.len() < samples_needed {
             debug!("Not enough audio samples yet ({} < {})", buffer.len(), samples_needed);
@@ -74,7 +81,17 @@ impl AudioProcessor {
                     // Return silence if no translation was generated
                     Ok(Some(vec![0.0; audio_data.len()]))
                 } else {
-                    Ok(Some(translated_audio))
+                    // Ensure the translated audio has the right length
+                    let mut result = translated_audio;
+                    if result.len() != audio_data.len() {
+                        // Pad or truncate to match input length
+                        if result.len() < audio_data.len() {
+                            result.extend(vec![0.0; audio_data.len() - result.len()]);
+                        } else {
+                            result.truncate(audio_data.len());
+                        }
+                    }
+                    Ok(Some(result))
                 }
             }
             Err(e) => {
@@ -100,6 +117,7 @@ impl AudioProcessor {
         translator: &Translator,
     ) -> Result<Vec<f32>> {
         info!("Starting audio translation pipeline");
+        println!("🎯 STARTING TRANSLATION PIPELINE with {} samples", audio_data.len());
         
         // Step 1: Speech-to-Text
         let text = translator.speech_to_text(audio_data).await?;
@@ -107,6 +125,7 @@ impl AudioProcessor {
         // Check if we have actual speech transcription
         if text.trim().is_empty() {
             debug!("STT returned empty string, no speech detected or transcription failed");
+            println!("❌ STT returned empty string - no speech detected");
             // Return empty audio since no speech was transcribed
             return Ok(Vec::new());
         } else {
@@ -120,6 +139,7 @@ impl AudioProcessor {
             // Step 3: Text-to-Speech
             let translated_audio = translator.text_to_speech(&translated_text).await?;
             info!("TTS completed, generated {} samples", translated_audio.len());
+            println!("✅ TTS completed: {} samples generated", translated_audio.len());
             
             Ok(translated_audio)
         }
