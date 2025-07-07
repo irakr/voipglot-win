@@ -46,6 +46,23 @@ impl LocalTranslator {
         })
     }
 
+    /// Pre-load the most common translation model to avoid delays during real-time processing
+    pub async fn preload_common_model(&self, source_lang: &str, target_lang: &str) -> Result<()> {
+        info!("Pre-loading common translation model for {} -> {}", source_lang, target_lang);
+        
+        // Try to load the model upfront
+        match self.get_or_load_model(source_lang, target_lang).await {
+            Ok(_) => {
+                info!("Successfully pre-loaded translation model for {} -> {}", source_lang, target_lang);
+                Ok(())
+            }
+            Err(e) => {
+                warn!("Failed to pre-load translation model for {} -> {}: {}. Will load on-demand.", source_lang, target_lang, e);
+                Ok(()) // Don't fail initialization, just warn
+            }
+        }
+    }
+
     pub async fn translate(
         &self,
         text: &str,
@@ -110,6 +127,7 @@ impl LocalTranslator {
         let model_name = self.get_model_name(source_lang, target_lang)?;
         info!("Loading model: {}", model_name);
         
+        // Use default configuration - the rust-bert library will handle model loading
         let pipeline = MarianGenerator::new(GenerateConfig::default())
             .map_err(|e| VoipGlotError::Translation(format!("Failed to load model {}: {}", model_name, e)))?;
         

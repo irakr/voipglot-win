@@ -30,6 +30,10 @@ struct Args {
     /// Target language for translation
     #[arg(short, long, default_value = "es")]
     target_lang: String,
+    
+    /// Enable audio passthrough mode (bypasses AI processing)
+    #[arg(short, long)]
+    passthrough: bool,
 }
 
 #[tokio::main]
@@ -51,8 +55,14 @@ async fn main() -> Result<()> {
     info!("Configuration loaded successfully");
     
     // Initialize audio manager
-    let mut audio_manager = AudioManager::new(config.audio.clone())?;
+    let mut audio_manager = AudioManager::new(config.audio.clone(), config.processing.clone())?;
     info!("Audio manager initialized");
+    
+    // Enable passthrough mode if requested
+    if args.passthrough {
+        info!("Audio passthrough mode enabled - bypassing AI processing");
+        audio_manager.enable_passthrough_mode();
+    }
     
     // Start the audio processing pipeline
     match run_audio_pipeline(&mut audio_manager, args.source_lang, args.target_lang).await {
@@ -62,7 +72,7 @@ async fn main() -> Result<()> {
         }
         Err(e) => {
             error!("Audio pipeline failed: {}", e);
-            Err(e)
+            Err(e.into())
         }
     }
 }
@@ -75,7 +85,18 @@ async fn run_audio_pipeline(
     info!("Starting audio processing pipeline");
     
     // Initialize translation components
-    let translator = translation::Translator::new(source_lang, target_lang)?;
+    let mut translator = translation::Translator::new(source_lang, target_lang)?;
+    
+    // Pre-initialize all AI models before starting audio processing
+    info!("Pre-initializing AI models...");
+    info!("This may take a few minutes on first run to download the Whisper model...");
+    match translator.initialize_models().await {
+        Ok(_) => info!("AI models initialized successfully"),
+        Err(e) => {
+            error!("AI model initialization failed: {}. Cannot proceed without required models.", e);
+            return Err(e.into());
+        }
+    }
     
     info!("Translation engine initialized");
     

@@ -2,10 +2,10 @@
 
 [audio]
 # Audio device settings
-input_device = ""  # Set to specific device name or leave empty for default
-output_device = ""  # Set to specific device name or leave empty for default
-sample_rate = 48000   # Sample rate in Hz (updated to match device capability)
-channels = 2          # Number of audio channels (2 = stereo, updated to match device)
+input_device = "Microphone Array"  # Use your specific microphone device
+output_device = "CABLE Input (VB-Audio Virtual Cable)"  # Explicitly use VB-CABLE for translated audio output
+sample_rate = 48000   # Sample rate in Hz (matches VB-CABLE default)
+channels = 2          # Number of audio channels (2 = stereo)
 buffer_size = 1024    # Audio buffer size in samples
 latency_ms = 50       # Target latency in milliseconds
 
@@ -17,6 +17,6 @@ target_language = "es"  # Target language code
 [processing]
 # Audio processing settings
 chunk_duration_ms = 1000  # Duration of audio chunks to process
-silence_threshold = 0.01  # Threshold for silence detection
+silence_threshold = 0.0001  # Much lower threshold for better audio detection
 noise_reduction = true    # Enable noise reduction
 echo_cancellation = true  # Enable echo cancellation 

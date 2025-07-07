@@ -13,6 +13,12 @@ impl TranslationApi {
         Ok(Self { local_translator })
     }
 
+    /// Pre-initialize the translation model for the specified language pair
+    pub async fn preload_model(&self, source_lang: &str, target_lang: &str) -> Result<()> {
+        info!("Pre-loading translation model for {} -> {}", source_lang, target_lang);
+        self.local_translator.preload_common_model(source_lang, target_lang).await
+    }
+
     pub async fn translate(
         &self,
         text: &str,
