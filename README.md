@@ -30,6 +30,39 @@ VoipGlot is a real-time audio translation application for Windows gaming and VOI
 winget install Rustlang.Rust.MSVC
 ```
 
+**⚠️ Important: Use rustup installation for full compatibility**
+
+The VoipGlot build scripts require `rustup` (Rust's toolchain manager) for managing targets and components. There are two ways to install Rust:
+
+**Option 1: Official rustup installer (Recommended)**
+- **Download from:** [https://rustup.rs/](https://rustup.rs/)
+- **Provides:** `rustup`, `cargo`, `rustfmt`, `clippy`, and full toolchain management
+- **PATH:** Adds `%USERPROFILE%\.cargo\bin` to your PATH
+- **Compatibility:** Full compatibility with all Rust projects and build scripts
+
+**Option 2: winget installation (Limited compatibility)**
+- **Command:** `winget install Rustlang.Rust.MSVC`
+- **Provides:** Standalone Rust compiler only
+- **PATH:** Adds `C:\Program Files\Rust stable MSVC 1.88\bin` to your PATH
+- **Limitations:** No `rustup`, `cargo`, or component management
+- **Issues:** Build scripts will fail with "rustup not recognized" errors
+
+**If you installed via winget and encounter issues:**
+1. Uninstall winget Rust:
+   ```powershell
+   winget uninstall "Rustlang.Rust.MSVC"
+   ```
+2. Install via rustup:
+   - Download `rustup-init.exe` from [https://rustup.rs/](https://rustup.rs/)
+   - Run the installer and follow the prompts
+   - Restart your terminal after installation
+
+**Verify installation:**
+```powershell
+rustup --version
+cargo --version
+```
+
 #### B. Install Visual Studio 2022 with C++ Support
 **Option 1: Full Visual Studio 2022**
 1. Download [Visual Studio 2022 Community](https://visualstudio.microsoft.com/vs/community/) (free)
@@ -184,20 +217,38 @@ winget install Rustlang.Rust.MSVC
 - This allows local scripts to run while keeping downloaded scripts restricted unless signed.
 - You only need to do this once per user account.
 
-**3. PyTorch compilation errors**
+**3. 'rustup' not recognized after installing Rust via winget**
+- If you installed Rust using `winget`, it should include `rustup`, but sometimes the PATH is not updated immediately.
+- If you see errors like:
+  > rustup : The term 'rustup' is not recognized as the name of a cmdlet, function, script file, or operable program.
+- **Solution:**
+  1. Close and reopen your terminal (or log out and back in) to reload your environment variables.
+  2. If the problem persists, manually add Rust's bin directory to your PATH:
+     - Open System Properties → Environment Variables
+     - Under "User variables" or "System variables", find `Path` and click Edit
+     - Add: `C:\Users\<YourUsername>\.cargo\bin`
+     - Click OK and restart your terminal
+  3. Verify by running:
+     ```powershell
+     rustup --version
+     cargo --version
+     ```
+  4. If you still have issues, try reinstalling Rust using the official installer from https://rustup.rs/
+
+**4. PyTorch compilation errors**
 - PyTorch 1.12.1 has known compatibility issues with newer MSVC
 - Try: `./build-windows.ps1 --no-pytorch` (API-only build)
 - Or upgrade to PyTorch 1.13.1+ for better compatibility
 
-**4. Build takes too long**
+**5. Build takes too long**
 - Use: `./build-windows.ps1 --fast` (2-3x faster)
 - Skip clippy: `./build-windows.ps1 --fast --no-clippy`
 
-**5. Dependency conflicts**
+**6. Dependency conflicts**
 - Try: `./build-windows.ps1 --clean`
 - Clear cargo cache: `cargo clean`
 
-**6. Permission errors**
+**7. Permission errors**
 - Run PowerShell as Administrator
 - Check antivirus isn't blocking the build
 
