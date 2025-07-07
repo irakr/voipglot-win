@@ -173,20 +173,31 @@ winget install Rustlang.Rust.MSVC
 - Or install standalone C++ Build Tools
 - **Always use "Developer PowerShell for VS 2022" for building**
 
-**2. PyTorch compilation errors**
+**2. PowerShell script execution policy error ('running scripts is disabled on this system')**
+- By default, Windows restricts running PowerShell scripts for security reasons.
+- If you see an error like:
+  > File ... cannot be loaded because running scripts is disabled on this system.
+- **Solution:** Open PowerShell and run:
+  ```powershell
+  Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+  ```
+- This allows local scripts to run while keeping downloaded scripts restricted unless signed.
+- You only need to do this once per user account.
+
+**3. PyTorch compilation errors**
 - PyTorch 1.12.1 has known compatibility issues with newer MSVC
-- Try: `.\build-windows.ps1 --no-pytorch` (API-only build)
+- Try: `./build-windows.ps1 --no-pytorch` (API-only build)
 - Or upgrade to PyTorch 1.13.1+ for better compatibility
 
-**3. Build takes too long**
-- Use: `.\build-windows.ps1 --fast` (2-3x faster)
-- Skip clippy: `.\build-windows.ps1 --fast --no-clippy`
+**4. Build takes too long**
+- Use: `./build-windows.ps1 --fast` (2-3x faster)
+- Skip clippy: `./build-windows.ps1 --fast --no-clippy`
 
-**4. Dependency conflicts**
-- Try: `.\build-windows.ps1 --clean`
+**5. Dependency conflicts**
+- Try: `./build-windows.ps1 --clean`
 - Clear cargo cache: `cargo clean`
 
-**5. Permission errors**
+**6. Permission errors**
 - Run PowerShell as Administrator
 - Check antivirus isn't blocking the build
 
