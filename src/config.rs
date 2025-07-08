@@ -1,10 +1,12 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use crate::error::{Result, VoipGlotError};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
     pub audio: AudioConfig,
     pub translation: TranslationConfig,
+    pub api: ApiConfig,
     pub processing: ProcessingConfig,
 }
 
@@ -22,11 +24,39 @@ pub struct AudioConfig {
 pub struct TranslationConfig {
     pub source_language: String,
     pub target_language: String,
+    pub stt_provider: SttProvider,
+    pub translation_provider: TranslationProvider,
+    pub tts_provider: TtsProvider,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum SttProvider {
+    Whisper,
+    Azure,
+    Google,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum TranslationProvider {
-    Local,
+    DeepL,
+    Google,
+    Azure,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum TtsProvider {
+    Azure,
+    ElevenLabs,
+    Google,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ApiConfig {
+    pub deepl_api_key: Option<String>,
+    pub azure_speech_key: Option<String>,
+    pub azure_region: Option<String>,
+    pub elevenlabs_api_key: Option<String>,
+    pub google_api_key: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -54,6 +84,7 @@ impl AppConfig {
         Self {
             audio: AudioConfig::default(),
             translation: TranslationConfig::default(),
+            api: ApiConfig::default(),
             processing: ProcessingConfig::default(),
         }
     }
@@ -77,6 +108,21 @@ impl Default for TranslationConfig {
         Self {
             source_language: "en".to_string(),
             target_language: "es".to_string(),
+            stt_provider: SttProvider::Whisper,
+            translation_provider: TranslationProvider::DeepL,
+            tts_provider: TtsProvider::Azure,
+        }
+    }
+}
+
+impl Default for ApiConfig {
+    fn default() -> Self {
+        Self {
+            deepl_api_key: None,
+            azure_speech_key: None,
+            azure_region: None,
+            elevenlabs_api_key: None,
+            google_api_key: None,
         }
     }
 }

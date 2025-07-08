@@ -1,30 +1,26 @@
-use crate::config::{AudioConfig, ProcessingConfig};
-use crate::error::Result;
+use crate::config::AudioConfig;
+use crate::error::{Result, VoipGlotError};
 use crate::translation::Translator;
-use tracing::{info, error, debug};
+use tracing::{info, error, debug, warn};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
 pub struct AudioProcessor {
     config: AudioConfig,
-    processing_config: ProcessingConfig,
     audio_buffer: Arc<Mutex<Vec<f32>>>,
     silence_threshold: f32,
     chunk_duration_ms: u32,
-    passthrough_mode: bool,
 }
 
 impl AudioProcessor {
-    pub fn new(audio_config: AudioConfig, processing_config: ProcessingConfig) -> Result<Self> {
+    pub fn new(config: AudioConfig) -> Result<Self> {
         info!("Initializing AudioProcessor");
         
         Ok(Self {
-            config: audio_config,
-            processing_config: processing_config.clone(),
+            config,
             audio_buffer: Arc::new(Mutex::new(Vec::new())),
-            silence_threshold: processing_config.silence_threshold,
-            chunk_duration_ms: processing_config.chunk_duration_ms,
-            passthrough_mode: false,
+            silence_threshold: 0.01,
+            chunk_duration_ms: 1000,
         })
     }
 
@@ -35,38 +31,22 @@ impl AudioProcessor {
     ) -> Result<Option<Vec<f32>>> {
         debug!("Processing audio chunk of {} samples", audio_data.len());
         
-        // AUDIO PASSTHROUGH MODE: Forward microphone directly to output
-        if self.passthrough_mode {
-            debug!("Passthrough mode: forwarding audio directly");
-            return Ok(Some(audio_data));
-        }
-        
         // Check if audio contains speech (not just silence)
         if !self.contains_speech(&audio_data) {
             debug!("Audio chunk contains only silence, skipping");
-            // Return silence audio to maintain buffer
-            return Ok(Some(vec![0.0; audio_data.len()]));
+            return Ok(None);
         }
         
         // Add audio to buffer
         let mut buffer = self.audio_buffer.lock().await;
-        buffer.extend(audio_data.clone());
+        buffer.extend(audio_data);
         
         // Check if we have enough audio for processing
         let samples_needed = (self.config.sample_rate as u32 * self.chunk_duration_ms / 1000) as usize;
         
-        // Limit buffer size to prevent overflow
-        let max_buffer_size = samples_needed * 4; // Keep max 4 chunks in buffer
-        if buffer.len() > max_buffer_size {
-            debug!("Buffer overflow detected ({} > {}), truncating", buffer.len(), max_buffer_size);
-            let excess = buffer.len() - max_buffer_size;
-            buffer.drain(..excess);
-        }
-        
         if buffer.len() < samples_needed {
             debug!("Not enough audio samples yet ({} < {})", buffer.len(), samples_needed);
-            // Return silence to maintain buffer while collecting more audio
-            return Ok(Some(vec![0.0; audio_data.len()]));
+            return Ok(None);
         }
         
         // Extract audio chunk for processing
@@ -77,27 +57,11 @@ impl AudioProcessor {
         match self.translate_audio(audio_chunk, translator).await {
             Ok(translated_audio) => {
                 debug!("Successfully translated audio");
-                if translated_audio.is_empty() {
-                    // Return silence if no translation was generated
-                    Ok(Some(vec![0.0; audio_data.len()]))
-                } else {
-                    // Ensure the translated audio has the right length
-                    let mut result = translated_audio;
-                    if result.len() != audio_data.len() {
-                        // Pad or truncate to match input length
-                        if result.len() < audio_data.len() {
-                            result.extend(vec![0.0; audio_data.len() - result.len()]);
-                        } else {
-                            result.truncate(audio_data.len());
-                        }
-                    }
-                    Ok(Some(result))
-                }
+                Ok(Some(translated_audio))
             }
             Err(e) => {
                 error!("Failed to translate audio: {}", e);
-                // Return silence on error to maintain buffer
-                Ok(Some(vec![0.0; audio_data.len()]))
+                Ok(None)
             }
         }
     }
@@ -117,32 +81,25 @@ impl AudioProcessor {
         translator: &Translator,
     ) -> Result<Vec<f32>> {
         info!("Starting audio translation pipeline");
-        println!("🎯 STARTING TRANSLATION PIPELINE with {} samples", audio_data.len());
         
         // Step 1: Speech-to-Text
         let text = translator.speech_to_text(audio_data).await?;
-        
-        // Check if we have actual speech transcription
         if text.trim().is_empty() {
-            debug!("STT returned empty string, no speech detected or transcription failed");
-            println!("❌ STT returned empty string - no speech detected");
-            // Return empty audio since no speech was transcribed
+            warn!("No speech detected in audio");
             return Ok(Vec::new());
-        } else {
-            // Normal flow with actual speech transcription
-            info!("STT Result: '{}'", text);
-            
-            // Step 2: Translation
-            let translated_text = translator.translate_text(&text).await?;
-            info!("Translation: '{}' -> '{}'", text, translated_text);
-            
-            // Step 3: Text-to-Speech
-            let translated_audio = translator.text_to_speech(&translated_text).await?;
-            info!("TTS completed, generated {} samples", translated_audio.len());
-            println!("✅ TTS completed: {} samples generated", translated_audio.len());
-            
-            Ok(translated_audio)
         }
+        
+        info!("STT Result: '{}'", text);
+        
+        // Step 2: Translation
+        let translated_text = translator.translate_text(&text).await?;
+        info!("Translation: '{}' -> '{}'", text, translated_text);
+        
+        // Step 3: Text-to-Speech
+        let translated_audio = translator.text_to_speech(&translated_text).await?;
+        info!("TTS completed, generated {} samples", translated_audio.len());
+        
+        Ok(translated_audio)
     }
 
     pub fn set_silence_threshold(&mut self, threshold: f32) {
@@ -162,20 +119,6 @@ impl AudioProcessor {
             sample_rate: self.config.sample_rate,
             channels: self.config.channels,
         }
-    }
-
-    pub fn enable_passthrough_mode(&mut self) {
-        self.passthrough_mode = true;
-        info!("Audio passthrough mode ENABLED - microphone audio will be forwarded directly to output");
-    }
-
-    pub fn disable_passthrough_mode(&mut self) {
-        self.passthrough_mode = false;
-        info!("Audio passthrough mode DISABLED - AI processing enabled");
-    }
-
-    pub fn is_passthrough_mode(&self) -> bool {
-        self.passthrough_mode
     }
 }
 

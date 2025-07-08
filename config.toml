@@ -2,10 +2,10 @@
 
 [audio]
 # Audio device settings
-input_device = "Microphone Array"  # Use your specific microphone device
-output_device = "CABLE Input (VB-Audio Virtual Cable)"  # Explicitly use VB-CABLE for translated audio output
-sample_rate = 48000   # Sample rate in Hz (matches VB-CABLE default)
-channels = 2          # Number of audio channels (2 = stereo)
+input_device = ""  # Set to specific device name or leave empty for default
+output_device = ""  # Set to specific device name or leave empty for default
+sample_rate = 48000   # Sample rate in Hz (updated to match device capability)
+channels = 2          # Number of audio channels (2 = stereo, updated to match device)
 buffer_size = 1024    # Audio buffer size in samples
 latency_ms = 50       # Target latency in milliseconds
 
@@ -13,10 +13,21 @@ latency_ms = 50       # Target latency in milliseconds
 # Translation settings
 source_language = "en"  # Source language code
 target_language = "es"  # Target language code
+stt_provider = "Whisper"  # Speech-to-Text provider: Whisper, Azure, Google
+translation_provider = "DeepL"  # Translation provider: DeepL, Google, Azure
+tts_provider = "Azure"  # Text-to-Speech provider: Azure, ElevenLabs, Google
+
+[api]
+# API keys (set via environment variables for security)
+deepl_api_key = ""  # Set VOIPGLOT_DEEPL_API_KEY environment variable
+azure_speech_key = ""  # Set VOIPGLOT_AZURE_SPEECH_KEY environment variable
+azure_region = ""  # Set VOIPGLOT_AZURE_REGION environment variable
+elevenlabs_api_key = ""  # Set VOIPGLOT_ELEVENLABS_API_KEY environment variable
+google_api_key = ""  # Set VOIPGLOT_GOOGLE_API_KEY environment variable
 
 [processing]
 # Audio processing settings
-chunk_duration_ms = 500   # Duration of audio chunks to process (reduced for faster processing)
-silence_threshold = 0.0001  # Much lower threshold for better audio detection
+chunk_duration_ms = 1000  # Duration of audio chunks to process
+silence_threshold = 0.01  # Threshold for silence detection
 noise_reduction = true    # Enable noise reduction
 echo_cancellation = true  # Enable echo cancellation 

@@ -1,15 +1,13 @@
 pub mod stt;
 pub mod translator_api;
 pub mod tts;
-pub mod local_translator;
 
-use crate::error::Result;
-use tracing::{info, error, debug, warn};
+use crate::error::{Result, VoipGlotError};
+use tracing::{info, error, debug};
 
 pub use stt::SpeechToText;
 pub use translator_api::TranslationApi;
 pub use tts::TextToSpeech;
-pub use local_translator::LocalTranslator;
 
 pub struct Translator {
     source_language: String,
@@ -22,9 +20,11 @@ pub struct Translator {
 impl Translator {
     pub fn new(source_lang: String, target_lang: String) -> Result<Self> {
         info!("Initializing Translator: {} -> {}", source_lang, target_lang);
+        
         let stt = SpeechToText::new(source_lang.clone())?;
         let translator = TranslationApi::new()?;
         let tts = TextToSpeech::new(target_lang.clone())?;
+        
         Ok(Self {
             source_language: source_lang,
             target_language: target_lang,
@@ -32,50 +32,6 @@ impl Translator {
             translator,
             tts,
         })
-    }
-
-    /// Pre-initialize all AI models before starting the audio pipeline
-    /// This ensures all models are loaded and ready before real-time processing begins
-    pub async fn initialize_models(&mut self) -> Result<()> {
-        info!("Pre-initializing AI models for real-time translation...");
-        
-        // Pre-load translation model
-        info!("Pre-loading translation model for {} -> {}", self.source_language, self.target_language);
-        match self.translator.preload_model(&self.source_language, &self.target_language).await {
-            Ok(_) => info!("Translation model loaded successfully"),
-            Err(e) => {
-                warn!("Translation model pre-load failed: {}. Will use fallback.", e);
-            }
-        }
-        
-        // Pre-load TTS model
-        info!("Pre-loading TTS model for language: {}", self.target_language);
-        match self.tts.initialize().await {
-            Ok(_) => info!("TTS model initialized successfully"),
-            Err(e) => {
-                warn!("TTS model pre-load failed: {}. Will use fallback.", e);
-            }
-        }
-        
-        // Pre-load STT model (Whisper) - download if needed
-        info!("Pre-loading STT model for language: {}", self.source_language);
-        match self.stt.download_and_load_model().await {
-            Ok(_) => info!("STT model downloaded and loaded successfully"),
-            Err(e) => {
-                error!("STT model download/load failed: {}. Cannot proceed without Whisper.", e);
-                return Err(e);
-            }
-        }
-        
-        info!("AI model initialization completed");
-        Ok(())
-    }
-
-    /// Check if all required models are ready for real-time processing
-    pub fn are_models_ready(&self) -> bool {
-        // For now, we assume models are ready if initialization completed
-        // In the future, we can add more sophisticated checks
-        true
     }
 
     pub async fn speech_to_text(&self, audio_data: Vec<f32>) -> Result<String> {
@@ -87,6 +43,7 @@ impl Translator {
         if text.trim().is_empty() {
             return Ok(String::new());
         }
+        
         debug!("Translating text: '{}'", text);
         self.translator.translate(text, &self.source_language, &self.target_language).await
     }
@@ -95,6 +52,7 @@ impl Translator {
         if text.trim().is_empty() {
             return Ok(Vec::new());
         }
+        
         debug!("Converting text to speech: '{}'", text);
         self.tts.synthesize(text).await
     }

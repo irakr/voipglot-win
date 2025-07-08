@@ -2,7 +2,7 @@ pub mod capture;
 pub mod playback;
 pub mod processing;
 
-use crate::config::{AudioConfig, ProcessingConfig};
+use crate::config::AudioConfig;
 use crate::error::Result;
 use crate::translation::Translator;
 use tracing::{info, error, debug};
@@ -13,21 +13,19 @@ pub use processing::AudioProcessor;
 
 pub struct AudioManager {
     config: AudioConfig,
-    processing_config: ProcessingConfig,
     capture: Option<AudioCapture>,
     playback: Option<AudioPlayback>,
     processor: AudioProcessor,
 }
 
 impl AudioManager {
-    pub fn new(audio_config: AudioConfig, processing_config: ProcessingConfig) -> Result<Self> {
-        info!("Initializing AudioManager with config: {:?}", audio_config);
+    pub fn new(config: AudioConfig) -> Result<Self> {
+        info!("Initializing AudioManager with config: {:?}", config);
         
-        let processor = AudioProcessor::new(audio_config.clone(), processing_config.clone())?;
+        let processor = AudioProcessor::new(config.clone())?;
         
         Ok(Self {
-            config: audio_config,
-            processing_config,
+            config,
             capture: None,
             playback: None,
             processor,
@@ -108,17 +106,5 @@ impl AudioManager {
         
         info!("Audio processing stopped");
         Ok(())
-    }
-
-    pub fn enable_passthrough_mode(&mut self) {
-        self.processor.enable_passthrough_mode();
-    }
-
-    pub fn disable_passthrough_mode(&mut self) {
-        self.processor.disable_passthrough_mode();
-    }
-
-    pub fn is_passthrough_mode(&self) -> bool {
-        self.processor.is_passthrough_mode()
     }
 } 

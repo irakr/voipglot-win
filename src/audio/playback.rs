@@ -1,6 +1,6 @@
 use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
-    Stream,
+    Sample, SampleFormat, Stream,
 };
 use crate::config::AudioConfig;
 use crate::error::{Result, VoipGlotError};
@@ -25,7 +25,7 @@ impl AudioPlayback {
         let host = cpal::default_host();
         let device = Self::find_output_device(&host, &config)?;
         
-        let (sender, receiver) = mpsc::channel(500);
+        let (sender, receiver) = mpsc::channel(100);
         
         Ok(Self {
             config,
@@ -158,8 +158,10 @@ impl AudioPlayback {
         buffer.drain(..samples_used);
         
         // Request more audio data if buffer is getting low
-        if buffer.len() < 2048 {
-            debug!("Audio buffer running low ({} samples), requesting more data", buffer.len());
+        if buffer.len() < 512 {
+            // This is a simple approach - in a real implementation,
+            // you might want to use a more sophisticated buffering strategy
+            debug!("Audio buffer running low, requesting more data");
         }
     }
 
