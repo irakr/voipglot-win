@@ -1,0 +1,28 @@
+[package]
+name = "tts-coqui-test"
+version = "0.1.0"
+edition = "2021"
+authors = ["VoipGlot Team"]
+description = "Real-time Text-to-Speech (TTS) using Coqui TTS - Proof of Concept"
+
+[dependencies]
+# Audio playback
+cpal = "0.15.2"
+dasp = "0.11.0"
+
+# Coqui TTS bindings
+tts = "0.26.3"  # Updated to latest version
+
+# Error handling
+anyhow = "1.0.80"
+
+# Simple logging
+env_logger = "0.10.0"
+log = "0.4.20"
+
+[build-dependencies]
+cc = "1.0"
+
+[[bin]]
+name = "tts-coqui-test"
+path = "src/main.rs" 

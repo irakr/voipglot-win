@@ -1,0 +1,33 @@
+# Rust build artifacts
+/target/
+**/*.rs.bk
+Cargo.lock
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Coqui TTS models and data (too large for git)
+/models/
+*.zip
+*.pth
+*.json
+/tts_models/
+
+# Python virtual environment
+/venv/
+__pycache__/
+*.pyc
+
+# Logs
+*.log
+
+# Environment files
+.env
+.env.local 
