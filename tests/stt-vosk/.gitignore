@@ -1,0 +1,25 @@
+# Rust build artifacts
+/target/
+**/*.rs.bk
+Cargo.lock
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# VOSK models (too large for git)
+/models/
+*.zip
+
+# Logs
+*.log
+
+# Environment files
+.env
+.env.local 

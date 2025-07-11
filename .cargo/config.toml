@@ -6,8 +6,7 @@ rustflags = ["-C", "target-cpu=native"]
 # Windows-specific build settings
 rustflags = [
     "-C", "target-cpu=native",
-    "-C", "link-arg=/SUBSYSTEM:CONSOLE",
-    "-C", "link-arg=/ENTRY:mainCRTStartup"
+    "-C", "link-arg=/SUBSYSTEM:CONSOLE"
 ]
 
 [profile.release]

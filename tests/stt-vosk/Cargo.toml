@@ -1,0 +1,28 @@
+[package]
+name = "stt-vosk-test"
+version = "0.1.0"
+edition = "2021"
+authors = ["VoipGlot Team"]
+description = "Real-time Speech-to-Text (STT) using VOSK framework - Proof of Concept"
+
+[dependencies]
+# Audio capture
+cpal = "0.15.2"
+dasp = "0.11.0"
+
+# VOSK bindings
+vosk = "0.2.0"
+
+# Error handling
+anyhow = "1.0.80"
+
+# Simple logging
+env_logger = "0.10.0"
+log = "0.4.20"
+
+[build-dependencies]
+cc = "1.0"
+
+[[bin]]
+name = "stt-vosk-test"
+path = "src/main.rs" 
