@@ -16,10 +16,10 @@ graph TB
         TR[Translator]
     end
     
-    subgraph "Translation Pipeline"
-        STT[Speech-to-Text]
-        TRANS[Translation API]
-        TTS[Text-to-Speech]
+    subgraph "AI Pipeline (Tested Components)"
+        STT[VOSK STT<br/>Offline Speech Recognition]
+        TRANS[CTranslate2<br/>NLLB-200 Translation]
+        TTS[Coqui TTS<br/>Speech Synthesis]
     end
     
     subgraph "Audio Output"
@@ -43,19 +43,19 @@ graph TB
     style APP fill:#e1f5fe
     style AM fill:#fff3e0
     style TR fill:#fff3e0
-    style STT fill:#f3e5f5
-    style TRANS fill:#f3e5f5
-    style TTS fill:#f3e5f5
+    style STT fill:#e8f5e8
+    style TRANS fill:#e8f5e8
+    style TTS fill:#e8f5e8
 ```
 
 ## Audio Pipeline Flow
 
 ```mermaid
 flowchart LR
-    subgraph "1. Audio Capture"
-        A1[Microphone Input]
-        A2[Audio Buffer]
-        A3[Chunk Processing]
+    subgraph "1. Audio Capture (VOSK)"
+        A1[Microphone Input<br/>16kHz Mono]
+        A2[Audio Buffer<br/>Real-time Chunks]
+        A3[VOSK Processing<br/>Speech Recognition]
     end
     
     subgraph "2. Preprocessing"
@@ -64,24 +64,24 @@ flowchart LR
         B3[Audio Normalization]
     end
     
-    subgraph "3. Speech Recognition"
-        C1[STT Processing]
-        C2[Text Extraction]
+    subgraph "3. Speech Recognition (VOSK)"
+        C1[VOSK STT Engine<br/>Offline Processing]
+        C2[Text Extraction<br/>Partial Results]
     end
     
-    subgraph "4. Translation"
-        D1[Text Translation]
-        D2[Language Conversion]
+    subgraph "4. Translation (CTranslate2)"
+        D1[NLLB-200 Model<br/>200+ Languages]
+        D2[CPU/GPU Acceleration<br/>Low Latency]
     end
     
-    subgraph "5. Speech Synthesis"
-        E1[TTS Processing]
-        E2[Audio Generation]
+    subgraph "5. Speech Synthesis (Coqui)"
+        E1[Coqui TTS Engine<br/>Natural Voices]
+        E2[Audio Generation<br/>Real-time Output]
     end
     
     subgraph "6. Audio Output"
         F1[Audio Buffer]
-        F2[Virtual Microphone]
+        F2[VB-CABLE Virtual Mic]
         F3[Target Application]
     end
     
@@ -94,9 +94,9 @@ flowchart LR
     
     style A1 fill:#e3f2fd
     style F3 fill:#e8f5e8
-    style C1 fill:#fff3e0
-    style D1 fill:#fff3e0
-    style E1 fill:#fff3e0
+    style C1 fill:#e8f5e8
+    style D1 fill:#e8f5e8
+    style E1 fill:#e8f5e8
 ```
 
 ## Component Interaction Diagram
@@ -108,47 +108,104 @@ sequenceDiagram
     participant AudioManager
     participant AudioProcessor
     participant Translator
-    participant STT
-    participant TranslationAPI
-    participant TTS
+    participant VOSK_STT
+    participant CTranslate2
+    participant Coqui_TTS
     participant AudioPlayback
-    participant VirtualMic
+    participant VB_CABLE
     
     User->>AudioCapture: Speak into microphone
-    AudioCapture->>AudioManager: Send audio chunks
+    AudioCapture->>AudioManager: Send audio chunks (16kHz mono)
     AudioManager->>AudioProcessor: Process audio data
     
     alt Audio contains speech
         AudioProcessor->>Translator: Request translation
-        Translator->>STT: Convert speech to text
-        STT-->>Translator: Return transcribed text
-        Translator->>TranslationAPI: Translate text
-        TranslationAPI-->>Translator: Return translated text
-        Translator->>TTS: Generate speech
-        TTS-->>Translator: Return audio data
+        Translator->>VOSK_STT: Convert speech to text
+        VOSK_STT-->>Translator: Return transcribed text
+        Translator->>CTranslate2: Translate text (NLLB-200)
+        CTranslate2-->>Translator: Return translated text
+        Translator->>Coqui_TTS: Generate speech
+        Coqui_TTS-->>Translator: Return audio data
         Translator-->>AudioProcessor: Return translated audio
         AudioProcessor->>AudioPlayback: Send audio for output
-        AudioPlayback->>VirtualMic: Output translated speech
-        VirtualMic-->>User: Play translated audio
+        AudioPlayback->>VB_CABLE: Output translated speech
+        VB_CABLE-->>User: Play translated audio
     else Audio is silence
         AudioProcessor->>AudioProcessor: Skip processing
     end
 ```
 
 ## Core Components
-- **AudioManager**: Orchestrates audio capture and playback
-- **AudioCapture**: Handles real microphone input
-- **AudioPlayback**: Outputs to virtual microphone
-- **AudioProcessor**: Manages the translation pipeline
-- **Translator**: Coordinates STT, translation, and TTS
+
+### ✅ Tested and Working Components
+
+#### AudioManager
+- **Purpose**: Orchestrates audio capture and playback
+- **Status**: Implemented and tested
+- **Features**: Real-time audio pipeline management, device detection
+
+#### AudioCapture (VOSK Integration)
+- **Purpose**: Handles real microphone input
+- **Status**: ✅ Successfully tested with VOSK
+- **Features**: 
+  - Real-time audio capture from physical devices
+  - Automatic device detection and configuration
+  - 16kHz mono audio processing (VOSK requirement)
+  - Multi-device support with fallback options
+
+#### AudioPlayback (Coqui TTS Integration)
+- **Purpose**: Outputs to virtual microphone
+- **Status**: ✅ Successfully tested with Coqui TTS
+- **Features**:
+  - Real-time audio output integration
+  - System audio device detection
+  - Configurable audio settings
+  - Direct TTS audio playback
+
+#### AudioProcessor
+- **Purpose**: Manages the translation pipeline
+- **Status**: Core logic implemented
+- **Features**: Audio preprocessing, silence detection, pipeline coordination
+
+#### Translator (CTranslate2 Integration)
+- **Purpose**: Coordinates STT, translation, and TTS
+- **Status**: ✅ Successfully tested with CTranslate2
+- **Features**:
+  - NLLB-200 model integration (200+ languages)
+  - CPU and GPU acceleration support
+  - Configurable translation parameters
+  - Offline processing capability
+
+### AI Pipeline Components
+
+#### VOSK STT Engine
+- **Type**: Offline speech recognition
+- **Model**: VOSK language models
+- **Languages**: 20+ languages with dedicated models
+- **Performance**: Real-time processing with partial results
+- **Requirements**: VOSK library and language models
+
+#### CTranslate2 Translation Engine
+- **Type**: Offline translation
+- **Model**: NLLB-200 (No Language Left Behind)
+- **Languages**: 200+ languages supported
+- **Performance**: Optimized for speed and efficiency
+- **Hardware**: CPU and GPU acceleration
+
+#### Coqui TTS Engine
+- **Type**: Offline speech synthesis
+- **Quality**: Natural-sounding voices
+- **Languages**: Multiple language support
+- **Features**: Voice customization and cloning options
+- **Integration**: Direct audio output integration
 
 ## Audio Pipeline
-1. **Capture**: Real-time audio from microphone
-2. **Preprocessing**: Noise reduction, silence detection
-3. **STT**: Convert speech to text
-4. **Translation**: Translate text to target language
-5. **TTS**: Convert translated text to speech
-6. **Playback**: Output to virtual microphone
+1. **Capture**: Real-time audio from microphone (16kHz mono for VOSK)
+2. **Preprocessing**: Noise reduction, silence detection, normalization
+3. **STT (VOSK)**: Convert speech to text using offline VOSK engine
+4. **Translation (CTranslate2)**: Translate text using NLLB-200 model
+5. **TTS (Coqui)**: Convert translated text to speech
+6. **Playback**: Output to VB-CABLE virtual microphone
 
 ## Project Structure
 ```
@@ -159,17 +216,21 @@ voipglot-win/
 │   ├── config.rs            # Configuration management
 │   ├── audio/               # Audio processing modules
 │   │   ├── mod.rs
-│   │   ├── capture.rs       # Audio capture
-│   │   ├── playback.rs      # Audio playback
+│   │   ├── capture.rs       # Audio capture (VOSK integration)
+│   │   ├── playback.rs      # Audio playback (Coqui TTS integration)
 │   │   └── processing.rs    # Audio processing pipeline
 │   └── translation/         # AI translation modules
 │       ├── mod.rs
-│       ├── stt.rs           # Speech-to-text
-│       ├── translator_api.rs # Text translation
-│       └── tts.rs           # Text-to-speech
+│       ├── stt.rs           # Speech-to-text (VOSK)
+│       ├── translator_api.rs # Text translation (CTranslate2)
+│       └── tts.rs           # Text-to-speech (Coqui TTS)
+├── tests/                   # Proof of Concept implementations
+│   ├── stt-vosk/           # ✅ Tested VOSK STT implementation
+│   ├── translation-ct2/    # ✅ Tested CTranslate2 implementation
+│   └── tts-coqui/          # ✅ Tested Coqui TTS implementation
 ├── Cargo.toml               # Rust dependencies
 ├── config.toml              # Configuration file
-└── README.md               # This file
+└── README.md               # Project documentation
 ```
 
 ## Data Flow Architecture
@@ -177,26 +238,26 @@ voipglot-win/
 ```mermaid
 graph TD
     subgraph "Input Layer"
-        I1[Real Microphone]
-        I2[Audio Device Detection]
+        I1[Real Microphone<br/>16kHz Mono]
+        I2[Audio Device Detection<br/>Automatic Configuration]
     end
     
     subgraph "Processing Layer"
-        P1[Audio Buffer Management]
-        P2[Chunk Processing]
-        P3[Silence Detection]
+        P1[Audio Buffer Management<br/>Real-time Chunks]
+        P2[VOSK STT Processing<br/>Offline Recognition]
+        P3[Silence Detection<br/>Noise Reduction]
     end
     
     subgraph "AI Services Layer"
-        AI1[Speech Recognition]
-        AI2[Text Translation]
-        AI3[Speech Synthesis]
+        AI1[VOSK Speech Recognition<br/>20+ Languages]
+        AI2[CTranslate2 Translation<br/>NLLB-200 Model]
+        AI3[Coqui Speech Synthesis<br/>Natural Voices]
     end
     
     subgraph "Output Layer"
-        O1[Audio Buffer]
-        O2[Virtual Microphone]
-        O3[Target Applications]
+        O1[Audio Buffer<br/>Real-time Output]
+        O2[VB-CABLE Virtual Mic<br/>System Integration]
+        O3[Target Applications<br/>Games/Discord/Zoom]
     end
     
     I1 --> I2
@@ -212,7 +273,22 @@ graph TD
     
     style I1 fill:#e8f5e8
     style O3 fill:#e8f5e8
-    style AI1 fill:#fff3e0
-    style AI2 fill:#fff3e0
-    style AI3 fill:#fff3e0
-``` 
+    style AI1 fill:#e8f5e8
+    style AI2 fill:#e8f5e8
+    style AI3 fill:#e8f5e8
+```
+
+## Implementation Status
+
+### ✅ Successfully Tested Components
+1. **VOSK STT**: Real-time speech recognition with automatic device detection
+2. **CTranslate2 Translation**: Offline translation with NLLB-200 model (200+ languages)
+3. **Coqui TTS**: Real-time speech synthesis with audio output
+4. **Build Automation**: Automated setup scripts for all components
+5. **Audio Device Management**: Cross-platform audio handling with CPAL
+
+### 🔄 Next Development Phase
+- **Pipeline Integration**: Connect all tested components into a working pipeline
+- **Virtual Microphone Integration**: VB-CABLE integration for audio output
+- **Performance Optimization**: Minimize end-to-end latency
+- **GUI Development**: User interface for configuration and monitoring 
