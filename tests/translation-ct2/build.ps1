@@ -130,7 +130,8 @@ $requiredPackages = @(
     "torch",
     "huggingface_hub",
     "protobuf",  # Added for compatibility
-    "hf_xet"     # Added for better download performance
+    "hf_xet",    # Added for better download performance
+    "sentencepiece"  # Added for Helsinki-NLP tokenizer
 )
 
 foreach ($package in $requiredPackages) {
@@ -158,12 +159,12 @@ foreach ($package in $requiredPackages) {
 # Set environment variable to disable symlink warning
 $env:HF_HUB_DISABLE_SYMLINKS_WARNING = "1"
 
-# Download and convert NLLB-200 model if not already present
+# Download and convert English to Spanish model if not already present
 $modelDir = Join-Path $modelsDir "nllb-200-ct2"
 $modelDirPosix = $modelDir.Replace("\", "/")
 
 if (-not (Test-Path $modelDir)) {
-    Write-Host "Converting NLLB-200 model to CTranslate2 format..."
+    Write-Host "Converting English to Spanish translation model to CTranslate2 format..."
     
     # Create model directory first
     New-Item -ItemType Directory -Path $modelDir -Force
@@ -181,8 +182,9 @@ def convert_model():
     if torch.cuda.is_available():
         print("CUDA device:", torch.cuda.get_device_name(0))
     
-    print("Downloading NLLB-200 model...")
-    model_name = 'facebook/nllb-200-distilled-600M'
+    print("Downloading English to Spanish translation model...")
+    # Use a dedicated English to Spanish model for consistent results
+    model_name = 'Helsinki-NLP/opus-mt-en-es'
     
     print("Loading tokenizer...")
     tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -215,7 +217,7 @@ def convert_model():
                     shutil.rmtree(d)
                 shutil.copytree(s, d)
         
-        print("Conversion completed successfully!")
+        print("Conversion completed successfully for English to Spanish!")
     finally:
         if os.path.exists(temp_dir):
             shutil.rmtree(temp_dir)

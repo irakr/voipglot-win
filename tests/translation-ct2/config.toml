@@ -1,12 +1,12 @@
 [model]
-# Path to the CTranslate2 model directory (NLLB-200)
+# Path to the CTranslate2 model directory (English to Spanish)
 path = "models/nllb-200-ct2"
 
 [translation]
-# Source language code (auto for automatic detection)
-source_lang = "eng_Latn"
-# Target language code
-target_lang = "spa_Latn"
+# Source language code (English)
+source_lang = "en"
+# Target language code (Spanish)
+target_lang = "es"
 # Number of translation threads
 num_threads = 4
 # Use CPU or GPU (cpu or cuda)

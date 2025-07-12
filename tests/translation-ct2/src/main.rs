@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use ct2rs::{Device, Translator, TranslationOptions, ComputeType};
 use serde::Deserialize;
 use std::path::PathBuf;
+use std::io::{self, Write};
 use tracing::{info, warn, error, Level};
 
 #[derive(Debug, Deserialize)]
@@ -43,6 +44,16 @@ fn load_config() -> Result<AppConfig> {
     let config_str = std::fs::read_to_string("config.toml")
         .context("Failed to read config.toml")?;
     toml::from_str(&config_str).context("Failed to parse config.toml")
+}
+
+fn get_user_input(prompt: &str) -> Result<String> {
+    print!("{}", prompt);
+    io::stdout().flush()?;
+    
+    let mut input = String::new();
+    io::stdin().read_line(&mut input)?;
+    
+    Ok(input.trim().to_string())
 }
 
 #[tokio::main]
@@ -134,17 +145,25 @@ async fn main() -> Result<()> {
     
     info!("Translator initialized successfully");
     
-    // Test translations
-    let test_sentences = vec![
-        "Hello, how are you?",
-        "This is a test of the translation system.",
-        "The quick brown fox jumps over the lazy dog.",
-    ];
+    println!("\n=== CTranslate2 Translation Tool ===");
+    println!("Source language: {}", config.translation.source_lang);
+    println!("Target language: {}", config.translation.target_lang);
+    println!("Enter text to translate (or 'quit' to exit):\n");
     
-    info!("Starting translation tests...");
-    
-    for sentence in test_sentences {
-        info!("Translating: {}", sentence);
+    // Interactive translation loop
+    loop {
+        let input = get_user_input("> ")?;
+        
+        if input.to_lowercase() == "quit" || input.to_lowercase() == "exit" {
+            println!("Goodbye!");
+            break;
+        }
+        
+        if input.trim().is_empty() {
+            continue;
+        }
+        
+        info!("Translating: {}", input);
         
         // Create translation options using Default trait
         let mut options = TranslationOptions::default();
@@ -152,26 +171,33 @@ async fn main() -> Result<()> {
         
         // Use translate_batch with correct API
         let translations = match translator.translate_batch(
-            &[sentence.to_string()],
+            &[input.clone()],
             &options,
             None,  // No callback function
         ) {
             Ok(translations) => translations,
             Err(e) => {
                 error!("Translation failed: {}", e);
-                return Err(anyhow::anyhow!("Translation failed: {}", e));
+                println!("Error: Translation failed - {}", e);
+                continue;
             }
         };
         
         if let Some(translation) = translations.first() {
             // Translation result is a tuple (String, Option<f32>)
-            let (translated_text, _score) = translation;
-            info!("Translation: {}", translated_text);
+            let (translated_text, score) = translation;
+            println!("Translation: {}", translated_text);
+            if let Some(s) = score {
+                println!("Confidence: {:.2}", s);
+            }
         } else {
             warn!("No translation produced");
+            println!("Error: No translation produced");
         }
+        
+        println!(); // Empty line for readability
     }
     
-    info!("Translation tests completed successfully");
+    info!("Translation tool completed");
     Ok(())
 } 
