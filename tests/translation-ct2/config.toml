@@ -1,0 +1,21 @@
+[model]
+# Path to the CTranslate2 model directory (NLLB-200)
+path = "models/nllb-200-ct2"
+
+[translation]
+# Source language code (auto for automatic detection)
+source_lang = "eng_Latn"
+# Target language code
+target_lang = "spa_Latn"
+# Number of translation threads
+num_threads = 4
+# Use CPU or GPU (cpu or cuda)
+device = "cpu"
+# Maximum batch size for translation
+max_batch_size = 32
+# Beam size for beam search
+beam_size = 4
+
+[logging]
+# Log level (trace, debug, info, warn, error)
+level = "info" 
