@@ -178,8 +178,15 @@ impl AudioPlayback {
         }
         
         // Request more audio data if buffer is getting low
-        if buffer.len() < 512 {
-            debug!("Audio buffer running low, requesting more data");
+        if buffer.len() < 1024 {
+            // Only log occasionally to avoid spam
+            static mut COUNTER: u32 = 0;
+            unsafe {
+                COUNTER += 1;
+                if COUNTER % 100 == 0 {
+                    debug!("Audio buffer running low ({} samples), requesting more data", buffer.len());
+                }
+            }
         }
     }
 

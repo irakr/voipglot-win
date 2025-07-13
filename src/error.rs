@@ -31,6 +31,12 @@ pub enum VoipGlotError {
     
     #[error("Unknown error: {0}")]
     Unknown(String),
+    
+    #[error("Initialization error: {0}")]
+    InitializationError(String),
+    
+    #[error("Synthesis error: {0}")]
+    SynthesisError(String),
 }
 
 impl From<cpal::BuildStreamError> for VoipGlotError {

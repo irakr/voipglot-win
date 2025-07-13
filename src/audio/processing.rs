@@ -45,7 +45,14 @@ impl AudioProcessor {
         let samples_needed = (self.config.sample_rate as u32 * self.chunk_duration_ms / 1000) as usize;
         
         if buffer.len() < samples_needed {
-            debug!("Not enough audio samples yet ({} < {})", buffer.len(), samples_needed);
+            // Only log occasionally to avoid spam
+            static mut COUNTER: u32 = 0;
+            unsafe {
+                COUNTER += 1;
+                if COUNTER % 50 == 0 {
+                    debug!("Not enough audio samples yet ({} < {})", buffer.len(), samples_needed);
+                }
+            }
             return Ok(None);
         }
         

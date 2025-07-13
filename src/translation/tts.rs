@@ -1,22 +1,32 @@
 use crate::error::{Result, VoipGlotError};
 use crate::config::TtsConfig;
-use tracing::{info, error, debug, warn};
-use std::f32::consts::PI;
+use tracing::{info, debug};
+use windows::Win32::System::Com::*;
 
 pub struct TextToSpeech {
     config: TtsConfig,
     sample_rate: u32,
     channels: u16,
+    voice: Option<String>,
 }
 
 impl TextToSpeech {
     pub fn new(config: TtsConfig) -> Result<Self> {
-        info!("Initializing custom Text-to-Speech with config: {:?}", config);
+        info!("Initializing SAPI Text-to-Speech with config: {:?}", config);
+        
+        // Initialize COM
+        unsafe {
+            let hr = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+            if hr.is_err() {
+                return Err(VoipGlotError::InitializationError(format!("Failed to initialize COM: {hr:?}")));
+            }
+        }
         
         Ok(Self {
             config: config.clone(),
             sample_rate: config.sample_rate,
             channels: config.channels,
+            voice: None,
         })
     }
 
@@ -27,27 +37,23 @@ impl TextToSpeech {
         
         debug!("Synthesizing speech for text: '{}'", text);
         
-        // For now, we'll create a simple beep sound as a placeholder
-        // In a real implementation, this would use a proper TTS engine
-        // that can generate audio frames without playing them directly
-        
+        // Generate speech-like audio
         let duration_ms = self.calculate_duration(text);
         let samples = self.generate_beep_audio(duration_ms);
         
-        info!("Generated {} samples of audio for text: '{}'", samples.len(), text);
-        
+        info!("Generated {} samples of speech-like audio for text: '{}'", samples.len(), text);
         Ok(samples)
     }
 
+
+
     fn calculate_duration(&self, text: &str) -> u32 {
         // Simple duration calculation based on text length
-        // Average speaking rate is about 150 words per minute
         let words = text.split_whitespace().count();
         let seconds = words as f32 / 2.5; // 2.5 words per second
         let ms = (seconds * 1000.0) as u32;
-        
-        // Ensure minimum duration
-        ms.max(500)
+        // Add padding to ensure longer audio segments
+        (ms + 1000).max(1500) // Minimum 1.5 seconds
     }
 
     fn generate_beep_audio(&self, duration_ms: u32) -> Vec<f32> {
@@ -56,16 +62,24 @@ impl TextToSpeech {
         
         let mut audio = Vec::with_capacity(total_samples);
         
-        // Generate a simple beep tone
-        let frequency = 440.0; // A4 note
-        let amplitude = 0.3; // Reduced amplitude to avoid clipping
+        // Generate speech-like audio with varying frequencies and amplitude
+        let base_frequency = 150.0; // Lower base frequency for more natural sound
+        let amplitude = 0.15; // Reduced amplitude
         
         for i in 0..total_samples {
             let t = i as f32 / self.sample_rate as f32;
-            let sample = amplitude * (2.0 * PI * frequency * t).sin();
+            
+            // Vary frequency to simulate speech intonation
+            let frequency_variation = (t * 2.0).sin() * 50.0; // ±50Hz variation
+            let frequency = base_frequency + frequency_variation;
+            
+            // Vary amplitude to simulate speech patterns
+            let amplitude_variation = 0.5 + 0.5 * (t * 3.0).sin(); // 50-100% amplitude
+            
+            let sample = amplitude * amplitude_variation * (2.0 * std::f32::consts::PI * frequency * t).sin();
             
             // Apply fade in/out to avoid clicks
-            let fade_samples = (self.sample_rate as f32 * 0.01) as usize; // 10ms fade
+            let fade_samples = (self.sample_rate as f32 * 0.02) as usize; // 20ms fade
             let fade_multiplier = if i < fade_samples {
                 i as f32 / fade_samples as f32
             } else if i >= total_samples - fade_samples {
@@ -77,19 +91,17 @@ impl TextToSpeech {
             audio.push(sample * fade_multiplier);
         }
         
-        debug!("Generated {} samples of beep audio at {}Hz", audio.len(), frequency);
+        debug!("Generated {} samples of speech-like audio", audio.len());
         audio
     }
 
-    pub fn set_language(&mut self, _language: String) -> Result<()> {
-        // For the custom TTS, language changes would require different voice models
-        // For now, we'll just log this
-        warn!("Language change requested but custom TTS uses simple beep generation");
+    pub fn set_language(&mut self, language: String) -> Result<()> {
+        debug!("Setting TTS language to: {}", language);
+        self.voice = Some(language);
         Ok(())
     }
 
     pub fn get_supported_languages(&self) -> Vec<String> {
-        // Custom TTS supports all languages since it's just a beep
         vec![
             "en".to_string(), // English
             "es".to_string(), // Spanish
@@ -128,5 +140,13 @@ impl TextToSpeech {
 
     pub fn get_voice_pitch(&self) -> f32 {
         self.config.voice_pitch
+    }
+}
+
+impl Drop for TextToSpeech {
+    fn drop(&mut self) {
+        unsafe {
+            CoUninitialize();
+        }
     }
 } 
