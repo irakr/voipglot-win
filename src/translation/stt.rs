@@ -3,6 +3,7 @@ use crate::config::SttConfig;
 use tracing::{info, error, debug, warn};
 use std::sync::{Arc, Mutex};
 use vosk::{Model, Recognizer, DecodingState};
+use serde_json;
 
 pub struct SpeechToText {
     config: SttConfig,
@@ -112,6 +113,16 @@ impl SpeechToText {
     fn extract_text_from_result(&self, result: &str) -> Option<String> {
         debug!("Processing VOSK result: {}", result);
         
+        // Try to parse as JSON first
+        if let Ok(json) = serde_json::from_str::<serde_json::Value>(result) {
+            if let Some(text) = json["text"].as_str() {
+                if !text.is_empty() {
+                    debug!("Extracted text from JSON: {}", text);
+                    return Some(text.to_string());
+                }
+            }
+        }
+        
         // For CompleteResultSingle format
         if result.contains("CompleteResultSingle") {
             if let Some(text_start) = result.find("text: \"") {
@@ -129,6 +140,19 @@ impl SpeechToText {
                 let text = result[text_start + 8..text_start + 8 + text_end].to_string();
                 debug!("Extracted text from JSON format: {}", text);
                 return Some(text);
+            }
+        }
+        
+        // Try to extract from partial results
+        if result.contains("partial: \"") {
+            if let Some(text_start) = result.find("partial: \"") {
+                if let Some(text_end) = result[text_start + 10..].find('\"') {
+                    let text = result[text_start + 10..text_start + 10 + text_end].to_string();
+                    if !text.is_empty() {
+                        debug!("Extracted text from partial result: {}", text);
+                        return Some(text);
+                    }
+                }
             }
         }
         

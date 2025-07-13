@@ -91,6 +91,7 @@ impl AudioPlayback {
         
         let config = self.build_stream_config(device)?;
         let audio_buffer = Arc::clone(&self.audio_buffer);
+        let channels = config.channels as usize;
         
         // Start a background task to receive audio data and add it to the buffer
         let receiver = self.receiver.take()
@@ -104,7 +105,7 @@ impl AudioPlayback {
         let stream = device.build_output_stream(
             &config,
             move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
-                Self::audio_callback(data, &audio_buffer);
+                Self::audio_callback(data, &audio_buffer, channels);
             },
             |err| {
                 error!("Audio playback error: {}", err);
@@ -138,16 +139,10 @@ impl AudioPlayback {
         
         info!("Supported output config: {:?}", supported_configs);
         
-        // Try to use the configured sample rate, fall back to supported config
-        let sample_rate = if supported_configs.sample_rate().0 >= self.config.sample_rate {
-            cpal::SampleRate(self.config.sample_rate)
-        } else {
-            supported_configs.sample_rate()
-        };
-        
+        // Use the device's supported configuration and handle conversion in the callback
         let config = cpal::StreamConfig {
-            channels: self.config.channels,
-            sample_rate,
+            channels: supported_configs.channels(),
+            sample_rate: supported_configs.sample_rate(),
             buffer_size: cpal::BufferSize::Fixed(self.config.buffer_size as u32),
         };
         
@@ -158,26 +153,32 @@ impl AudioPlayback {
     fn audio_callback(
         data: &mut [f32],
         audio_buffer: &Arc<Mutex<Vec<f32>>>,
+        channels: usize,
     ) {
         let mut buffer = audio_buffer.lock().unwrap();
         
         // Fill the output buffer with available audio data
-        for (i, sample) in data.iter_mut().enumerate() {
-            if let Some(&audio_sample) = buffer.get(i) {
-                *sample = audio_sample;
+        // Handle multi-channel output by duplicating mono samples
+        let samples_per_frame = channels;
+        
+        for frame in data.chunks_mut(samples_per_frame) {
+            if let Some(&audio_sample) = buffer.get(0) {
+                // Duplicate mono sample to all channels
+                for sample in frame.iter_mut() {
+                    *sample = audio_sample;
+                }
+                // Remove the sample we just used
+                buffer.drain(0..1);
             } else {
-                *sample = 0.0; // Silence if no more data
+                // Silence if no more data
+                for sample in frame.iter_mut() {
+                    *sample = 0.0;
+                }
             }
         }
         
-        // Remove the samples we just used
-        let samples_used = data.len().min(buffer.len());
-        buffer.drain(..samples_used);
-        
         // Request more audio data if buffer is getting low
         if buffer.len() < 512 {
-            // This is a simple approach - in a real implementation,
-            // you might want to use a more sophisticated buffering strategy
             debug!("Audio buffer running low, requesting more data");
         }
     }

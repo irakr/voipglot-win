@@ -125,7 +125,7 @@ impl AudioCapture {
         data: &[f32],
         audio_buffer: &Arc<Mutex<Vec<f32>>>,
         sender: &mpsc::Sender<Vec<f32>>,
-        _device_sample_rate: u32,
+        device_sample_rate: u32,
     ) {
         // Convert stereo to mono if needed
         let mono_samples: Vec<f32> = if data.len() > 1 && data.len() % 2 == 0 {
@@ -147,15 +147,32 @@ impl AudioCapture {
         
         // Calculate chunk size based on target sample rate (16kHz for VOSK)
         // We want 1 second of audio at 16kHz, so we need to accumulate enough samples
-        let target_sample_rate = 16000;
-        let samples_per_second = target_sample_rate;
+        let target_sample_rate: u32 = 16000;
+        let samples_per_second = target_sample_rate as usize;
         let chunk_size = samples_per_second;
         
         if buffer.len() >= chunk_size {
             let chunk: Vec<f32> = buffer.drain(..chunk_size).collect();
             
+            // Simple sample rate conversion: downsample if needed
+            let converted_chunk = if device_sample_rate != target_sample_rate {
+                let ratio = device_sample_rate as f32 / target_sample_rate as f32;
+                let new_length = (chunk.len() as f32 / ratio) as usize;
+                let mut converted = Vec::with_capacity(new_length);
+                
+                for i in 0..new_length {
+                    let src_index = (i as f32 * ratio) as usize;
+                    if src_index < chunk.len() {
+                        converted.push(chunk[src_index]);
+                    }
+                }
+                converted
+            } else {
+                chunk
+            };
+            
             // Try to send the chunk, but don't block if the receiver is slow
-            if let Err(e) = sender.try_send(chunk) {
+            if let Err(e) = sender.try_send(converted_chunk) {
                 debug!("Failed to send audio chunk: {}", e);
             }
         }
