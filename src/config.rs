@@ -5,9 +5,11 @@ use crate::error::{Result, VoipGlotError};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
     pub audio: AudioConfig,
+    pub stt: SttConfig,
     pub translation: TranslationConfig,
-    pub api: ApiConfig,
+    pub tts: TtsConfig,
     pub processing: ProcessingConfig,
+    pub logging: LoggingConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -18,45 +20,36 @@ pub struct AudioConfig {
     pub channels: u16,
     pub buffer_size: usize,
     pub latency_ms: u32,
+    pub vb_cable_device: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SttConfig {
+    pub provider: String,
+    pub model_path: String,
+    pub sample_rate: f32,
+    pub enable_partial_results: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TranslationConfig {
+    pub provider: String,
+    pub model_path: String,
     pub source_language: String,
     pub target_language: String,
-    pub stt_provider: SttProvider,
-    pub translation_provider: TranslationProvider,
-    pub tts_provider: TtsProvider,
+    pub num_threads: usize,
+    pub device: String,
+    pub max_batch_size: usize,
+    pub beam_size: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum SttProvider {
-    Whisper,
-    Azure,
-    Google,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum TranslationProvider {
-    DeepL,
-    Google,
-    Azure,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum TtsProvider {
-    Azure,
-    ElevenLabs,
-    Google,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ApiConfig {
-    pub deepl_api_key: Option<String>,
-    pub azure_speech_key: Option<String>,
-    pub azure_region: Option<String>,
-    pub elevenlabs_api_key: Option<String>,
-    pub google_api_key: Option<String>,
+pub struct TtsConfig {
+    pub provider: String,
+    pub sample_rate: u32,
+    pub channels: u16,
+    pub voice_speed: f32,
+    pub voice_pitch: f32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -65,6 +58,13 @@ pub struct ProcessingConfig {
     pub silence_threshold: f32,
     pub noise_reduction: bool,
     pub echo_cancellation: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LoggingConfig {
+    pub level: String,
+    pub format: String,
+    pub log_file: Option<String>,
 }
 
 impl AppConfig {
@@ -83,9 +83,11 @@ impl AppConfig {
     pub fn default() -> Self {
         Self {
             audio: AudioConfig::default(),
+            stt: SttConfig::default(),
             translation: TranslationConfig::default(),
-            api: ApiConfig::default(),
+            tts: TtsConfig::default(),
             processing: ProcessingConfig::default(),
+            logging: LoggingConfig::default(),
         }
     }
 }
@@ -99,6 +101,18 @@ impl Default for AudioConfig {
             channels: 1,
             buffer_size: 1024,
             latency_ms: 50,
+            vb_cable_device: "CABLE Input (VB-Audio Virtual Cable)".to_string(),
+        }
+    }
+}
+
+impl Default for SttConfig {
+    fn default() -> Self {
+        Self {
+            provider: "vosk".to_string(),
+            model_path: "models/vosk-model-small-en-us-0.15".to_string(),
+            sample_rate: 16000.0,
+            enable_partial_results: true,
         }
     }
 }
@@ -106,23 +120,26 @@ impl Default for AudioConfig {
 impl Default for TranslationConfig {
     fn default() -> Self {
         Self {
+            provider: "ct2".to_string(),
+            model_path: "models/nllb-200-ct2".to_string(),
             source_language: "en".to_string(),
             target_language: "es".to_string(),
-            stt_provider: SttProvider::Whisper,
-            translation_provider: TranslationProvider::DeepL,
-            tts_provider: TtsProvider::Azure,
+            num_threads: 4,
+            device: "cpu".to_string(),
+            max_batch_size: 32,
+            beam_size: 4,
         }
     }
 }
 
-impl Default for ApiConfig {
+impl Default for TtsConfig {
     fn default() -> Self {
         Self {
-            deepl_api_key: None,
-            azure_speech_key: None,
-            azure_region: None,
-            elevenlabs_api_key: None,
-            google_api_key: None,
+            provider: "custom".to_string(),
+            sample_rate: 22050,
+            channels: 1,
+            voice_speed: 1.0,
+            voice_pitch: 1.0,
         }
     }
 }
@@ -134,6 +151,16 @@ impl Default for ProcessingConfig {
             silence_threshold: 0.01,
             noise_reduction: true,
             echo_cancellation: true,
+        }
+    }
+}
+
+impl Default for LoggingConfig {
+    fn default() -> Self {
+        Self {
+            level: "info".to_string(),
+            format: "simple".to_string(),
+            log_file: None,
         }
     }
 } 

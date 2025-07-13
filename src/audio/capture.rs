@@ -42,17 +42,24 @@ impl AudioCapture {
         let devices = host.input_devices()
             .map_err(|e| VoipGlotError::Audio(format!("Failed to enumerate input devices: {}", e)))?;
         
+        info!("Available input devices:");
+        let mut device_list = Vec::new();
+        for device in devices {
+            if let Ok(name) = device.name() {
+                device_list.push((device, name.clone()));
+                info!("  - {}", name);
+            }
+        }
+        
         // If a specific device is configured, try to find it
         if let Some(device_name) = &config.input_device {
-            for device in devices {
-                if let Ok(name) = device.name() {
-                    if name.contains(device_name) {
-                        info!("Found configured input device: {}", name);
-                        return Ok(Some(device));
-                    }
+            for (device, name) in &device_list {
+                if name.contains(device_name) {
+                    info!("Found configured input device: {}", name);
+                    return Ok(Some(device.clone()));
                 }
             }
-            warn!("Configured input device '{}' not found, using default", device_name);
+            warn!("Configured input device '{}' not found", device_name);
         }
         
         // Use default input device
@@ -77,11 +84,12 @@ impl AudioCapture {
         let sender = self.sender.as_ref()
             .ok_or_else(|| VoipGlotError::Audio("Sender not available".to_string()))?;
         
+        let device_sample_rate = config.sample_rate.0;
         let sender_clone = sender.clone();
         let stream = device.build_input_stream(
             &config,
             move |data: &[f32], _: &cpal::InputCallbackInfo| {
-                Self::audio_callback(data, &audio_buffer, &sender_clone);
+                Self::audio_callback(data, &audio_buffer, &sender_clone, device_sample_rate);
             },
             |err| {
                 error!("Audio capture error: {}", err);
@@ -102,16 +110,10 @@ impl AudioCapture {
         
         info!("Supported input config: {:?}", supported_configs);
         
-        // Try to use the configured sample rate, fall back to supported config
-        let sample_rate = if supported_configs.sample_rate().0 >= self.config.sample_rate {
-            cpal::SampleRate(self.config.sample_rate)
-        } else {
-            supported_configs.sample_rate()
-        };
-        
+        // Use the device's supported configuration and handle conversion in the callback
         let config = cpal::StreamConfig {
-            channels: self.config.channels,
-            sample_rate,
+            channels: supported_configs.channels(),
+            sample_rate: supported_configs.sample_rate(),
             buffer_size: cpal::BufferSize::Fixed(self.config.buffer_size as u32),
         };
         
@@ -123,13 +125,32 @@ impl AudioCapture {
         data: &[f32],
         audio_buffer: &Arc<Mutex<Vec<f32>>>,
         sender: &mpsc::Sender<Vec<f32>>,
+        _device_sample_rate: u32,
     ) {
+        // Convert stereo to mono if needed
+        let mono_samples: Vec<f32> = if data.len() > 1 && data.len() % 2 == 0 {
+            // Assume stereo input, convert to mono
+            data.chunks(2).map(|chunk| {
+                if chunk.len() == 2 {
+                    (chunk[0] + chunk[1]) / 2.0
+                } else {
+                    chunk[0]
+                }
+            }).collect()
+        } else {
+            data.to_vec()
+        };
+        
         // Copy audio data to our buffer
         let mut buffer = audio_buffer.lock().unwrap();
-        buffer.extend_from_slice(data);
+        buffer.extend_from_slice(&mono_samples);
         
-        // If we have enough samples for a chunk, send it
-        let chunk_size = 1024; // 1 second at 16kHz
+        // Calculate chunk size based on target sample rate (16kHz for VOSK)
+        // We want 1 second of audio at 16kHz, so we need to accumulate enough samples
+        let target_sample_rate = 16000;
+        let samples_per_second = target_sample_rate;
+        let chunk_size = samples_per_second;
+        
         if buffer.len() >= chunk_size {
             let chunk: Vec<f32> = buffer.drain(..chunk_size).collect();
             
@@ -179,5 +200,22 @@ impl AudioCapture {
         }
         
         Ok(device_names)
+    }
+
+    pub fn find_vb_cable_device(&self) -> Result<Option<cpal::Device>> {
+        let devices = self.host.input_devices()
+            .map_err(|e| VoipGlotError::Audio(format!("Failed to enumerate devices: {}", e)))?;
+        
+        for device in devices {
+            if let Ok(name) = device.name() {
+                if name.contains("CABLE Input") || name.contains("VB-Audio") {
+                    info!("Found VB Cable device: {}", name);
+                    return Ok(Some(device));
+                }
+            }
+        }
+        
+        warn!("VB Cable device not found");
+        Ok(None)
     }
 } 

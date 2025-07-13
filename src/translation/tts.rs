@@ -1,48 +1,22 @@
 use crate::error::{Result, VoipGlotError};
-use tracing::{info, error, debug};
-use serde::{Deserialize, Serialize};
-use base64::engine::general_purpose::STANDARD;
-use base64::Engine;
+use crate::config::TtsConfig;
+use tracing::{info, error, debug, warn};
+use std::f32::consts::PI;
 
 pub struct TextToSpeech {
-    language: String,
-    provider: TtsProvider,
-    client: reqwest::Client,
-    api_keys: TtsApiKeys,
-}
-
-#[derive(Debug, Clone)]
-pub enum TtsProvider {
-    Azure,
-    ElevenLabs,
-    Google,
-}
-
-#[derive(Debug, Clone)]
-pub struct TtsApiKeys {
-    pub azure: Option<String>,
-    pub elevenlabs: Option<String>,
-    pub google: Option<String>,
+    config: TtsConfig,
+    sample_rate: u32,
+    channels: u16,
 }
 
 impl TextToSpeech {
-    pub fn new(language: String) -> Result<Self> {
-        info!("Initializing Text-to-Speech with language: {}", language);
-        
-        let client = reqwest::Client::new();
-        
-        // Load API keys from environment variables
-        let api_keys = TtsApiKeys {
-            azure: std::env::var("AZURE_SPEECH_KEY").ok(),
-            elevenlabs: std::env::var("ELEVENLABS_API_KEY").ok(),
-            google: std::env::var("GOOGLE_API_KEY").ok(),
-        };
+    pub fn new(config: TtsConfig) -> Result<Self> {
+        info!("Initializing custom Text-to-Speech with config: {:?}", config);
         
         Ok(Self {
-            language,
-            provider: TtsProvider::Azure, // Default to Azure
-            client,
-            api_keys,
+            config: config.clone(),
+            sample_rate: config.sample_rate,
+            channels: config.channels,
         })
     }
 
@@ -51,199 +25,71 @@ impl TextToSpeech {
             return Ok(Vec::new());
         }
         
-        debug!("Synthesizing text to speech: '{}'", text);
+        debug!("Synthesizing speech for text: '{}'", text);
         
-        match self.provider {
-            TtsProvider::Azure => self.synthesize_with_azure(text).await,
-            TtsProvider::ElevenLabs => self.synthesize_with_elevenlabs(text).await,
-            TtsProvider::Google => self.synthesize_with_google(text).await,
-        }
-    }
-
-    async fn synthesize_with_azure(&self, text: &str) -> Result<Vec<f32>> {
-        debug!("Using Azure Speech Services for TTS");
+        // For now, we'll create a simple beep sound as a placeholder
+        // In a real implementation, this would use a proper TTS engine
+        // that can generate audio frames without playing them directly
         
-        let api_key = self.api_keys.azure.as_ref()
-            .ok_or_else(|| VoipGlotError::Api("Azure Speech API key not found".to_string()))?;
+        let duration_ms = self.calculate_duration(text);
+        let samples = self.generate_beep_audio(duration_ms);
         
-        let region = std::env::var("AZURE_REGION")
-            .unwrap_or_else(|_| "eastus".to_string());
-        
-        let url = format!("https://{}.tts.speech.microsoft.com/cognitiveservices/v1", region);
-        
-        let ssml = self.build_azure_ssml(text);
-        
-        let response = self.client
-            .post(&url)
-            .header("Ocp-Apim-Subscription-Key", api_key)
-            .header("Content-Type", "application/ssml+xml")
-            .header("X-Microsoft-OutputFormat", "riff-16khz-16bit-mono-pcm")
-            .body(ssml)
-            .send()
-            .await
-            .map_err(|e| VoipGlotError::Network(e))?;
-        
-        if !response.status().is_success() {
-            let error_text = response.text().await.unwrap_or_default();
-            return Err(VoipGlotError::Api(format!("Azure TTS API error: {}", error_text)));
-        }
-        
-        let audio_bytes = response.bytes().await
-            .map_err(|e| VoipGlotError::Network(e))?;
-        
-        // Convert audio bytes to f32 samples
-        self.convert_audio_bytes_to_samples(&audio_bytes)
-    }
-
-    async fn synthesize_with_elevenlabs(&self, text: &str) -> Result<Vec<f32>> {
-        debug!("Using ElevenLabs for TTS");
-        
-        let api_key = self.api_keys.elevenlabs.as_ref()
-            .ok_or_else(|| VoipGlotError::Api("ElevenLabs API key not found".to_string()))?;
-        
-        let url = "https://api.elevenlabs.io/v1/text-to-speech/21m00Tcm4TlvDq8ikWAM";
-        
-        let request_body = ElevenLabsRequest {
-            text: text.to_string(),
-            model_id: "eleven_monolingual_v1".to_string(),
-            voice_settings: ElevenLabsVoiceSettings {
-                stability: 0.5,
-                similarity_boost: 0.5,
-            },
-        };
-        
-        let response = self.client
-            .post(url)
-            .header("xi-api-key", api_key)
-            .header("Content-Type", "application/json")
-            .json(&request_body)
-            .send()
-            .await
-            .map_err(|e| VoipGlotError::Network(e))?;
-        
-        if !response.status().is_success() {
-            let error_text = response.text().await.unwrap_or_default();
-            return Err(VoipGlotError::Api(format!("ElevenLabs API error: {}", error_text)));
-        }
-        
-        let audio_bytes = response.bytes().await
-            .map_err(|e| VoipGlotError::Network(e))?;
-        
-        // Convert audio bytes to f32 samples
-        self.convert_audio_bytes_to_samples(&audio_bytes)
-    }
-
-    async fn synthesize_with_google(&self, text: &str) -> Result<Vec<f32>> {
-        debug!("Using Google Text-to-Speech for TTS");
-        
-        let api_key = self.api_keys.google.as_ref()
-            .ok_or_else(|| VoipGlotError::Api("Google API key not found".to_string()))?;
-        
-        let url = "https://texttospeech.googleapis.com/v1/text:synthesize";
-        
-        let request_body = GoogleTtsRequest {
-            input: GoogleTtsInput {
-                text: text.to_string(),
-            },
-            voice: GoogleTtsVoice {
-                language_code: self.language.clone(),
-                name: format!("{}-Standard-A", self.language),
-            },
-            audio_config: GoogleTtsAudioConfig {
-                audio_encoding: "LINEAR16".to_string(),
-                sample_rate_hertz: 16000,
-            },
-        };
-        
-        let response = self.client
-            .post(url)
-            .query(&[("key", api_key)])
-            .json(&request_body)
-            .send()
-            .await
-            .map_err(|e| VoipGlotError::Network(e))?;
-        
-        if !response.status().is_success() {
-            let error_text = response.text().await.unwrap_or_default();
-            return Err(VoipGlotError::Api(format!("Google TTS API error: {}", error_text)));
-        }
-        
-        let tts_response: GoogleTtsResponse = response.json().await
-            .map_err(|e| VoipGlotError::Network(e))?;
-        
-        // Decode base64 audio content
-        let audio_bytes = STANDARD.decode(&tts_response.audio_content)
-            .map_err(|e| VoipGlotError::Audio(format!("Failed to decode base64 audio: {}", e)))?;
-        
-        // Convert audio bytes to f32 samples
-        self.convert_audio_bytes_to_samples(&audio_bytes)
-    }
-
-    fn build_azure_ssml(&self, text: &str) -> String {
-        // Build SSML (Speech Synthesis Markup Language) for Azure
-        format!(
-            r#"<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="{}">
-                <voice name="{}">
-                    {}
-                </voice>
-            </speak>"#,
-            self.language,
-            self.get_azure_voice_name(),
-            text
-        )
-    }
-
-    fn get_azure_voice_name(&self) -> &str {
-        match self.language.as_str() {
-            "en" => "en-US-JennyNeural",
-            "es" => "es-ES-ElviraNeural",
-            "fr" => "fr-FR-DeniseNeural",
-            "de" => "de-DE-KatjaNeural",
-            "it" => "it-IT-ElsaNeural",
-            "pt" => "pt-BR-FranciscaNeural",
-            "ru" => "ru-RU-SvetlanaNeural",
-            "ja" => "ja-JP-NanamiNeural",
-            "ko" => "ko-KR-SunHiNeural",
-            "zh" => "zh-CN-XiaoxiaoNeural",
-            _ => "en-US-JennyNeural", // Default fallback
-        }
-    }
-
-    fn convert_audio_bytes_to_samples(&self, audio_bytes: &[u8]) -> Result<Vec<f32>> {
-        // Convert 16-bit PCM audio bytes to f32 samples
-        let mut samples = Vec::new();
-        
-        // Skip WAV header if present (first 44 bytes)
-        let audio_data = if audio_bytes.len() > 44 && &audio_bytes[0..4] == b"RIFF" {
-            &audio_bytes[44..]
-        } else {
-            audio_bytes
-        };
-        
-        // Convert 16-bit little-endian samples to f32
-        for chunk in audio_data.chunks(2) {
-            if chunk.len() == 2 {
-                let sample_i16 = i16::from_le_bytes([chunk[0], chunk[1]]);
-                let sample_f32 = sample_i16 as f32 / 32768.0; // Normalize to [-1.0, 1.0]
-                samples.push(sample_f32);
-            }
-        }
+        info!("Generated {} samples of audio for text: '{}'", samples.len(), text);
         
         Ok(samples)
     }
 
-    pub fn set_language(&mut self, language: String) -> Result<()> {
-        self.language = language;
-        info!("TTS language set to: {}", self.language);
+    fn calculate_duration(&self, text: &str) -> u32 {
+        // Simple duration calculation based on text length
+        // Average speaking rate is about 150 words per minute
+        let words = text.split_whitespace().count();
+        let seconds = words as f32 / 2.5; // 2.5 words per second
+        let ms = (seconds * 1000.0) as u32;
+        
+        // Ensure minimum duration
+        ms.max(500)
+    }
+
+    fn generate_beep_audio(&self, duration_ms: u32) -> Vec<f32> {
+        let samples_per_ms = self.sample_rate as f32 / 1000.0;
+        let total_samples = (duration_ms as f32 * samples_per_ms) as usize;
+        
+        let mut audio = Vec::with_capacity(total_samples);
+        
+        // Generate a simple beep tone
+        let frequency = 440.0; // A4 note
+        let amplitude = 0.3; // Reduced amplitude to avoid clipping
+        
+        for i in 0..total_samples {
+            let t = i as f32 / self.sample_rate as f32;
+            let sample = amplitude * (2.0 * PI * frequency * t).sin();
+            
+            // Apply fade in/out to avoid clicks
+            let fade_samples = (self.sample_rate as f32 * 0.01) as usize; // 10ms fade
+            let fade_multiplier = if i < fade_samples {
+                i as f32 / fade_samples as f32
+            } else if i >= total_samples - fade_samples {
+                (total_samples - i) as f32 / fade_samples as f32
+            } else {
+                1.0
+            };
+            
+            audio.push(sample * fade_multiplier);
+        }
+        
+        debug!("Generated {} samples of beep audio at {}Hz", audio.len(), frequency);
+        audio
+    }
+
+    pub fn set_language(&mut self, _language: String) -> Result<()> {
+        // For the custom TTS, language changes would require different voice models
+        // For now, we'll just log this
+        warn!("Language change requested but custom TTS uses simple beep generation");
         Ok(())
     }
 
-    pub fn set_provider(&mut self, provider: TtsProvider) {
-        self.provider = provider;
-        info!("TTS provider set to: {:?}", self.provider);
-    }
-
     pub fn get_supported_languages(&self) -> Vec<String> {
+        // Custom TTS supports all languages since it's just a beep
         vec![
             "en".to_string(), // English
             "es".to_string(), // Spanish
@@ -257,46 +103,30 @@ impl TextToSpeech {
             "zh".to_string(), // Chinese
         ]
     }
-}
 
-#[derive(Debug, Serialize)]
-struct ElevenLabsRequest {
-    text: String,
-    model_id: String,
-    voice_settings: ElevenLabsVoiceSettings,
-}
+    pub fn get_sample_rate(&self) -> u32 {
+        self.sample_rate
+    }
 
-#[derive(Debug, Serialize)]
-struct ElevenLabsVoiceSettings {
-    stability: f32,
-    similarity_boost: f32,
-}
+    pub fn get_channels(&self) -> u16 {
+        self.channels
+    }
 
-#[derive(Debug, Serialize)]
-struct GoogleTtsRequest {
-    input: GoogleTtsInput,
-    voice: GoogleTtsVoice,
-    audio_config: GoogleTtsAudioConfig,
-}
+    pub fn set_voice_speed(&mut self, speed: f32) {
+        self.config.voice_speed = speed.max(0.1).min(3.0);
+        info!("Voice speed set to: {}", self.config.voice_speed);
+    }
 
-#[derive(Debug, Serialize)]
-struct GoogleTtsInput {
-    text: String,
-}
+    pub fn set_voice_pitch(&mut self, pitch: f32) {
+        self.config.voice_pitch = pitch.max(0.5).min(2.0);
+        info!("Voice pitch set to: {}", self.config.voice_pitch);
+    }
 
-#[derive(Debug, Serialize)]
-struct GoogleTtsVoice {
-    language_code: String,
-    name: String,
-}
+    pub fn get_voice_speed(&self) -> f32 {
+        self.config.voice_speed
+    }
 
-#[derive(Debug, Serialize)]
-struct GoogleTtsAudioConfig {
-    audio_encoding: String,
-    sample_rate_hertz: i32,
-}
-
-#[derive(Debug, Deserialize)]
-struct GoogleTtsResponse {
-    audio_content: String,
+    pub fn get_voice_pitch(&self) -> f32 {
+        self.config.voice_pitch
+    }
 } 

@@ -42,17 +42,34 @@ impl AudioPlayback {
         let devices = host.output_devices()
             .map_err(|e| VoipGlotError::Audio(format!("Failed to enumerate output devices: {}", e)))?;
         
+        info!("Available output devices:");
+        let mut device_list = Vec::new();
+        for device in devices {
+            if let Ok(name) = device.name() {
+                device_list.push((device, name.clone()));
+                info!("  - {}", name);
+            }
+        }
+        
         // If a specific device is configured, try to find it
         if let Some(device_name) = &config.output_device {
-            for device in devices {
-                if let Ok(name) = device.name() {
-                    if name.contains(device_name) {
-                        info!("Found configured output device: {}", name);
-                        return Ok(Some(device));
-                    }
+            for (device, name) in &device_list {
+                if name.contains(device_name) {
+                    info!("Found configured output device: {}", name);
+                    return Ok(Some(device.clone()));
                 }
             }
-            warn!("Configured output device '{}' not found, using default", device_name);
+            warn!("Configured output device '{}' not found", device_name);
+        }
+        
+        // Try to find VB Cable device if configured
+        if config.vb_cable_device.is_empty() {
+            for (device, name) in &device_list {
+                if name.contains("CABLE Input") || name.contains("VB-Audio") {
+                    info!("Found VB Cable device: {}", name);
+                    return Ok(Some(device.clone()));
+                }
+            }
         }
         
         // Use default output device
@@ -200,6 +217,23 @@ impl AudioPlayback {
         }
         
         Ok(device_names)
+    }
+
+    pub fn find_vb_cable_device(&self) -> Result<Option<cpal::Device>> {
+        let devices = self.host.output_devices()
+            .map_err(|e| VoipGlotError::Audio(format!("Failed to enumerate devices: {}", e)))?;
+        
+        for device in devices {
+            if let Ok(name) = device.name() {
+                if name.contains("CABLE Input") || name.contains("VB-Audio") {
+                    info!("Found VB Cable device: {}", name);
+                    return Ok(Some(device));
+                }
+            }
+        }
+        
+        warn!("VB Cable device not found");
+        Ok(None)
     }
 
     pub fn set_volume(&mut self, volume: f32) -> Result<()> {

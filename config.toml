@@ -2,32 +2,51 @@
 
 [audio]
 # Audio device settings
-input_device = ""  # Set to specific device name or leave empty for default
-output_device = ""  # Set to specific device name or leave empty for default
-sample_rate = 48000   # Sample rate in Hz (updated to match device capability)
-channels = 2          # Number of audio channels (2 = stereo, updated to match device)
+input_device = "Microphone Array (Realtek(R) Audio)"  # Set to specific device name or leave empty for default
+output_device = "CABLE Input (VB-Audio Virtual Cable)"  # Set to specific device name or leave empty for default
+sample_rate = 16000   # Sample rate in Hz (VOSK works best with 16kHz)
+channels = 1          # Number of audio channels (1 = mono for VOSK)
 buffer_size = 1024    # Audio buffer size in samples
 latency_ms = 50       # Target latency in milliseconds
 
+# VB Cable device configuration
+vb_cable_device = "CABLE Input (VB-Audio Virtual Cable)"  # VB Cable input device name
+
+[stt]
+# VOSK Speech-to-Text settings
+provider = "vosk"  # STT provider: vosk
+model_path = "models/vosk-model-small-en-us-0.15"  # Path to VOSK model
+sample_rate = 16000.0  # VOSK model sample rate
+enable_partial_results = true  # Enable partial recognition results
+
 [translation]
-# Translation settings
+# CTranslate2 translation settings
+provider = "ct2"  # Translation provider: ct2
+model_path = "models/nllb-200-ct2"  # Path to CT2 model
 source_language = "en"  # Source language code
 target_language = "es"  # Target language code
-stt_provider = "Whisper"  # Speech-to-Text provider: Whisper, Azure, Google
-translation_provider = "DeepL"  # Translation provider: DeepL, Google, Azure
-tts_provider = "Azure"  # Text-to-Speech provider: Azure, ElevenLabs, Google
+num_threads = 4  # Number of translation threads
+device = "cpu"  # Use CPU or GPU (cpu or cuda)
+max_batch_size = 32  # Maximum batch size for translation
+beam_size = 4  # Beam size for beam search
 
-[api]
-# API keys (set via environment variables for security)
-deepl_api_key = ""  # Set VOIPGLOT_DEEPL_API_KEY environment variable
-azure_speech_key = ""  # Set VOIPGLOT_AZURE_SPEECH_KEY environment variable
-azure_region = ""  # Set VOIPGLOT_AZURE_REGION environment variable
-elevenlabs_api_key = ""  # Set VOIPGLOT_ELEVENLABS_API_KEY environment variable
-google_api_key = ""  # Set VOIPGLOT_GOOGLE_API_KEY environment variable
+[tts]
+# Custom Text-to-Speech settings
+provider = "custom"  # TTS provider: custom
+sample_rate = 22050  # TTS output sample rate
+channels = 1  # TTS output channels (mono)
+voice_speed = 1.0  # Voice speed multiplier
+voice_pitch = 1.0  # Voice pitch multiplier
 
 [processing]
 # Audio processing settings
 chunk_duration_ms = 1000  # Duration of audio chunks to process
 silence_threshold = 0.01  # Threshold for silence detection
 noise_reduction = true    # Enable noise reduction
-echo_cancellation = true  # Enable echo cancellation 
+echo_cancellation = true  # Enable echo cancellation
+
+[logging]
+# Logging configuration
+level = "info"  # Log level (trace, debug, info, warn, error)
+format = "simple"  # Log format (simple, json)
+log_file = "voipglot.log"  # Log file path (optional) 

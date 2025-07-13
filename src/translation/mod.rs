@@ -3,6 +3,7 @@ pub mod translator_api;
 pub mod tts;
 
 use crate::error::{Result, VoipGlotError};
+use crate::config::{SttConfig, TranslationConfig, TtsConfig};
 use tracing::{info, error, debug};
 
 pub use stt::SpeechToText;
@@ -18,16 +19,16 @@ pub struct Translator {
 }
 
 impl Translator {
-    pub fn new(source_lang: String, target_lang: String) -> Result<Self> {
-        info!("Initializing Translator: {} -> {}", source_lang, target_lang);
+    pub fn new(stt_config: SttConfig, translation_config: TranslationConfig, tts_config: TtsConfig) -> Result<Self> {
+        info!("Initializing Translator: {} -> {}", translation_config.source_language, translation_config.target_language);
         
-        let stt = SpeechToText::new(source_lang.clone())?;
-        let translator = TranslationApi::new()?;
-        let tts = TextToSpeech::new(target_lang.clone())?;
+        let stt = SpeechToText::new(stt_config)?;
+        let translator = TranslationApi::new(translation_config.clone())?;
+        let tts = TextToSpeech::new(tts_config)?;
         
         Ok(Self {
-            source_language: source_lang,
-            target_language: target_lang,
+            source_language: translation_config.source_language.clone(),
+            target_language: translation_config.target_language.clone(),
             stt,
             translator,
             tts,
@@ -57,6 +58,38 @@ impl Translator {
         self.tts.synthesize(text).await
     }
 
+    pub async fn process_audio_pipeline(&self, audio_data: Vec<f32>) -> Result<Option<Vec<f32>>> {
+        debug!("Processing audio pipeline with {} samples", audio_data.len());
+        
+        // Step 1: Speech to Text
+        let transcribed_text = self.speech_to_text(audio_data).await?;
+        if transcribed_text.is_empty() {
+            debug!("No speech detected, skipping translation");
+            return Ok(None);
+        }
+        
+        info!("Transcribed: '{}'", transcribed_text);
+        
+        // Step 2: Translation
+        let translated_text = self.translate_text(&transcribed_text).await?;
+        if translated_text.is_empty() {
+            debug!("Translation failed or produced empty result");
+            return Ok(None);
+        }
+        
+        info!("Translated: '{}' -> '{}'", transcribed_text, translated_text);
+        
+        // Step 3: Text to Speech
+        let synthesized_audio = self.text_to_speech(&translated_text).await?;
+        if synthesized_audio.is_empty() {
+            debug!("TTS failed or produced empty audio");
+            return Ok(None);
+        }
+        
+        info!("Synthesized {} samples of audio", synthesized_audio.len());
+        Ok(Some(synthesized_audio))
+    }
+
     pub fn set_source_language(&mut self, lang: String) {
         self.source_language = lang.clone();
         if let Err(e) = self.stt.set_language(lang) {
@@ -77,6 +110,19 @@ impl Translator {
             translation: self.translator.get_supported_languages(),
             tts: self.tts.get_supported_languages(),
         }
+    }
+
+    pub fn get_source_language(&self) -> &str {
+        &self.source_language
+    }
+
+    pub fn get_target_language(&self) -> &str {
+        &self.target_language
+    }
+
+    pub fn reset_stt(&mut self) -> Result<()> {
+        debug!("Resetting STT recognizer");
+        self.stt.reset()
     }
 }
 

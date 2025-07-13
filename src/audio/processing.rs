@@ -54,13 +54,18 @@ impl AudioProcessor {
         drop(buffer); // Release lock
         
         // Process the audio through the translation pipeline
-        match self.translate_audio(audio_chunk, translator).await {
+        match translator.process_audio_pipeline(audio_chunk).await {
             Ok(translated_audio) => {
-                debug!("Successfully translated audio");
-                Ok(Some(translated_audio))
+                if let Some(audio) = translated_audio {
+                    debug!("Successfully processed audio pipeline, generated {} samples", audio.len());
+                    Ok(Some(audio))
+                } else {
+                    debug!("Audio pipeline completed but no output generated");
+                    Ok(None)
+                }
             }
             Err(e) => {
-                error!("Failed to translate audio: {}", e);
+                error!("Failed to process audio pipeline: {}", e);
                 Ok(None)
             }
         }
@@ -73,33 +78,6 @@ impl AudioProcessor {
         
         debug!("Audio RMS: {}, threshold: {}", rms, self.silence_threshold);
         rms > self.silence_threshold
-    }
-
-    async fn translate_audio(
-        &self,
-        audio_data: Vec<f32>,
-        translator: &Translator,
-    ) -> Result<Vec<f32>> {
-        info!("Starting audio translation pipeline");
-        
-        // Step 1: Speech-to-Text
-        let text = translator.speech_to_text(audio_data).await?;
-        if text.trim().is_empty() {
-            warn!("No speech detected in audio");
-            return Ok(Vec::new());
-        }
-        
-        info!("STT Result: '{}'", text);
-        
-        // Step 2: Translation
-        let translated_text = translator.translate_text(&text).await?;
-        info!("Translation: '{}' -> '{}'", text, translated_text);
-        
-        // Step 3: Text-to-Speech
-        let translated_audio = translator.text_to_speech(&translated_text).await?;
-        info!("TTS completed, generated {} samples", translated_audio.len());
-        
-        Ok(translated_audio)
     }
 
     pub fn set_silence_threshold(&mut self, threshold: f32) {
@@ -119,6 +97,13 @@ impl AudioProcessor {
             sample_rate: self.config.sample_rate,
             channels: self.config.channels,
         }
+    }
+
+    pub async fn clear_buffer(&mut self) {
+        // Clear the audio buffer
+        let mut buffer = self.audio_buffer.lock().await;
+        buffer.clear();
+        debug!("Audio buffer cleared");
     }
 }
 

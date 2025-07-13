@@ -1,152 +1,284 @@
-# VoipGlot Windows
+# VoipGlot Windows - Real-time Audio Translation
 
-Real-time audio translation for Windows gaming and VOIP applications.
+VoipGlot Windows is a real-time audio translation application designed for gaming and VOIP applications. It provides offline speech-to-text, translation, and text-to-speech capabilities using local models.
 
-## 🚀 Project Status
+## Features
 
-**✅ Core Components Successfully Tested**
+- **Offline Processing**: All components work locally without requiring internet connectivity
+- **Real-time Translation**: Low-latency audio processing pipeline
+- **VB Cable Support**: Designed to work with VB-Audio Virtual Cable for seamless integration
+- **Multiple Language Support**: Supports 200+ languages through NLLB-200 model
+- **Configurable Audio**: Flexible audio device configuration
 
-All three core components of the VoipGlot pipeline have been successfully implemented and tested as individual Proof of Concept (PoC) applications:
+## Architecture
 
-- **✅ VOSK STT**: Real-time speech recognition with automatic device detection
-- **✅ CTranslate2 Translation**: Offline translation with NLLB-200 model (200+ languages)
-- **✅ Coqui TTS**: Real-time speech synthesis with audio output
+The application implements the following pipeline:
 
-**🔄 Current Phase: Pipeline Integration**
-
-The next development phase involves integrating all tested components into a complete audio translation pipeline.
-
-## 🏗️ Audio Pipeline Architecture
-
-```mermaid
-graph TB
-    subgraph "Audio Input"
-        MIC[🎤 Real Microphone<br/>16kHz Mono Audio]
-    end
-    
-    subgraph "VoipGlot Core Pipeline"
-        AC[🎵 Audio Capture<br/>Real-time Buffering]
-        STT[🗣️ VOSK STT<br/>Speech Recognition]
-        TRANS[🌐 CTranslate2<br/>NLLB-200 Translation]
-        TTS[🔊 Coqui TTS<br/>Speech Synthesis]
-        AP[🎧 Audio Playback<br/>Virtual Output]
-    end
-    
-    subgraph "Audio Output"
-        VM[🎛️ VB-CABLE<br/>Virtual Microphone]
-        APP[🎮 Target Applications<br/>Games/Discord/Zoom]
-    end
-    
-    MIC --> AC
-    AC --> STT
-    STT --> TRANS
-    TRANS --> TTS
-    TTS --> AP
-    AP --> VM
-    VM --> APP
-    
-    style MIC fill:#e1f5fe
-    style VM fill:#e1f5fe
-    style APP fill:#e1f5fe
-    style STT fill:#e8f5e8
-    style TRANS fill:#e8f5e8
-    style TTS fill:#e8f5e8
+```
+(Microphone) → [VoipGlot] → [VOSK STT] → [CT2 Translation] → [Custom TTS] → (VB Cable Output)
 ```
 
-## 📋 Quickstart
+### Components
 
-### Testing Individual Components
+1. **VOSK Speech-to-Text**: Offline speech recognition using VOSK models
+2. **CTranslate2 Translation**: Fast neural machine translation using NLLB-200
+3. **Custom Text-to-Speech**: Simple audio synthesis (placeholder for future TTS engines)
+4. **Audio Processing**: Real-time audio capture and playback with VB Cable support
 
-Each core component can be tested independently. See their respective README files for detailed instructions:
+## Prerequisites
 
-#### 1. Speech-to-Text (VOSK)
-```powershell
-cd tests/stt-vosk
-.\build.ps1 -SetupEnv -DownloadModel
-cargo run --release
-```
-📖 **Documentation**: [tests/stt-vosk/README.md](tests/stt-vosk/README.md)
+### Required Software
 
-#### 2. Translation (CTranslate2)
-```powershell
-cd tests/translation-ct2
-.\build.ps1
-cargo run --release
-```
-📖 **Documentation**: [tests/translation-ct2/README.md](tests/translation-ct2/README.md)
+1. **VB-Audio Virtual Cable**: Download and install from [VB-Audio](https://vb-audio.com/Cable/)
+2. **Visual Studio 2022**: For building the Rust application
+3. **Rust Toolchain**: Latest stable Rust version
 
-#### 3. Text-to-Speech (Coqui)
-```powershell
-cd tests/tts-coqui
-.\build.ps1
-cargo run --release
-```
-📖 **Documentation**: [tests/tts-coqui/README.md](tests/tts-coqui/README.md)
+### Required Models
 
-### Prerequisites
+1. **VOSK Model**: `vosk-model-small-en-us-0.15` (automatically downloaded)
+2. **CT2 Model**: NLLB-200 model converted to CT2 format (manual download required)
 
-1. **Windows**: Developer PowerShell environment
-2. **Python**: 3.8-3.12 (for CTranslate2)
-3. **CMake**: 3.28.3 (for CTranslate2)
-4. **Rust**: 2021 edition or later
-5. **VOSK**: Library and models (automated download)
-6. **Coqui TTS**: Python package (automated installation)
+## Installation
 
-### Main Application (In Development)
+### 1. Clone the Repository
 
-```powershell
-# Clone the repository
+```bash
 git clone <repository-url>
 cd voipglot-win
-
-# Build the main application
-.\build-windows.ps1
-
-# Run the application
-.\target\x86_64-pc-windows-msvc/release/voipglot-win.exe
 ```
 
-## 📚 Documentation
+### 2. Install VB-Audio Virtual Cable
 
-- [**PoC Status**](docs/poc-status.md) - Detailed status of tested components
-- [**Features**](docs/features.md) - Current and planned features
-- [**Architecture**](docs/architecture.md) - System architecture and data flow
-- [**Configuration**](docs/configuration.md) - Configuration management
-- [**Usage & Optimization**](docs/usage.md) - Usage guidelines and optimization
-- [**AI Providers & Languages**](docs/providers.md) - Supported AI providers and languages
-- [**Troubleshooting**](docs/troubleshooting.md) - Common issues and solutions
-- [**Performance**](docs/performance.md) - Performance characteristics and optimization
-- [**Roadmap**](docs/roadmap.md) - Development roadmap and future plans
+1. Download VB-Audio Virtual Cable from [VB-Audio](https://vb-audio.com/Cable/)
+2. Install the application
+3. Verify installation by checking Windows audio devices
 
-## 🎯 Current Capabilities
+### 3. Build the Application
 
-### ✅ Tested and Working
-- **Real-time audio capture** from physical microphones
-- **Offline speech recognition** using VOSK (20+ languages)
-- **Offline translation** using CTranslate2 with NLLB-200 (200+ languages)
-- **Real-time speech synthesis** using Coqui TTS
-- **Automated setup scripts** for all components
-- **Cross-platform audio handling** with CPAL
-- **Comprehensive error handling** and logging
+#### Using the Integrated Build Script (Recommended)
 
-### 🔄 In Development
-- **Pipeline integration** of all tested components
-- **Virtual microphone output** (VB-CABLE integration)
-- **End-to-end latency optimization**
-- **Graphical user interface**
+```powershell
+# Open Developer PowerShell and run:
+.\build-integrated.ps1 -DownloadModels -Release
+```
 
-## 📈 Performance Characteristics
+#### Manual Build
 
-- **STT Latency**: Real-time processing (< 100ms)
-- **Translation Speed**: 10-50ms per sentence
-- **TTS Generation**: 100-500ms for sentence generation
-- **Memory Usage**: 3-6GB total (model dependent)
-- **CPU Usage**: Moderate, with GPU acceleration support
+```powershell
+# Download VOSK model
+mkdir models
+# Download vosk-model-small-en-us-0.15.zip and extract to models/
 
-## 🤝 Contributing
+# Download CT2 model
+# Download NLLB-200 CT2 model and extract to models/nllb-200-ct2/
 
-The project is currently in active development. All core components have been successfully tested and the focus is now on pipeline integration and performance optimization.
+# Build the application
+cargo build --release
+```
 
-## 📄 License
+### 4. Configure Audio Devices
 
-This project is licensed under the MIT License - see the LICENSE file for details. 
+1. Set your microphone as the default input device
+2. Set VB Cable Input as the default output device in your VOIP application
+3. Configure VoipGlot to output to VB Cable Output
+
+## Configuration
+
+The application uses `config.toml` for configuration:
+
+```toml
+[audio]
+input_device = ""  # Leave empty for default microphone
+output_device = ""  # Leave empty for default output
+sample_rate = 16000
+channels = 1
+buffer_size = 1024
+vb_cable_device = "CABLE Input (VB-Audio Virtual Cable)"
+
+[stt]
+provider = "vosk"
+model_path = "models/vosk-model-small-en-us-0.15"
+sample_rate = 16000.0
+enable_partial_results = true
+
+[translation]
+provider = "ct2"
+model_path = "models/nllb-200-ct2"
+source_language = "en"
+target_language = "es"
+num_threads = 4
+device = "cpu"
+max_batch_size = 32
+beam_size = 4
+
+[tts]
+provider = "custom"
+sample_rate = 22050
+channels = 1
+voice_speed = 1.0
+voice_pitch = 1.0
+
+[processing]
+chunk_duration_ms = 1000
+silence_threshold = 0.01
+noise_reduction = true
+echo_cancellation = true
+
+[logging]
+level = "info"
+format = "simple"
+log_file = "voipglot.log"
+```
+
+## Usage
+
+### Basic Usage
+
+```bash
+# List available audio devices
+voipglot-win.exe --list-devices
+
+# Run with default settings (English to Spanish)
+voipglot-win.exe
+
+# Run with debug logging
+voipglot-win.exe --debug
+
+# Run with custom languages
+voipglot-win.exe --source-lang en --target-lang fr
+```
+
+### Command Line Options
+
+- `--config <file>`: Specify configuration file (default: config.toml)
+- `--debug`: Enable debug logging
+- `--list-devices`: List available audio devices
+- `--source-lang <lang>`: Source language code (default: en)
+- `--target-lang <lang>`: Target language code (default: es)
+
+### Supported Languages
+
+The application supports 200+ languages through the NLLB-200 model. Common language codes:
+
+- `en`: English
+- `es`: Spanish
+- `fr`: French
+- `de`: German
+- `it`: Italian
+- `pt`: Portuguese
+- `ru`: Russian
+- `ja`: Japanese
+- `ko`: Korean
+- `zh`: Chinese
+
+## Troubleshooting
+
+### Common Issues
+
+1. **VB Cable Device Not Found**
+   - Ensure VB-Audio Virtual Cable is properly installed
+   - Check Windows audio devices in Sound settings
+   - Restart the application after installation
+
+2. **Models Not Found**
+   - Verify model paths in config.toml
+   - Use `--list-devices` to check audio device names
+   - Download missing models using the build script
+
+3. **Audio Quality Issues**
+   - Adjust `silence_threshold` in config.toml
+   - Check audio device sample rates
+   - Ensure proper audio device configuration
+
+4. **High Latency**
+   - Reduce `chunk_duration_ms` in config.toml
+   - Increase `buffer_size` for better performance
+   - Use release build for better performance
+
+### Debug Information
+
+Enable debug logging to get detailed information:
+
+```bash
+voipglot-win.exe --debug
+```
+
+Check the log file (`voipglot.log`) for detailed error messages and processing information.
+
+## Development
+
+### Project Structure
+
+```
+voipglot-win/
+├── src/
+│   ├── audio/          # Audio capture and playback
+│   ├── translation/    # STT, translation, and TTS components
+│   ├── config.rs       # Configuration management
+│   ├── error.rs        # Error handling
+│   └── main.rs         # Main application entry point
+├── tests/              # Individual component tests
+├── models/             # Model files (VOSK, CT2)
+├── config.toml         # Configuration file
+└── build-integrated.ps1 # Build script
+```
+
+### Building Individual Components
+
+Each component can be tested individually in the `tests/` directory:
+
+```bash
+# Test VOSK STT
+cd tests/stt-vosk
+cargo run
+
+# Test CT2 Translation
+cd tests/translation-ct2
+cargo run
+
+# Test TTS
+cd tests/tts-coqui
+cargo run
+```
+
+### Adding New Features
+
+1. **New TTS Engine**: Implement in `src/translation/tts.rs`
+2. **New STT Engine**: Implement in `src/translation/stt.rs`
+3. **New Translation Engine**: Implement in `src/translation/translator_api.rs`
+4. **Audio Processing**: Extend `src/audio/processing.rs`
+
+## Performance
+
+### Optimization Tips
+
+1. **Use Release Build**: Always use `--release` for production
+2. **Adjust Thread Count**: Set appropriate `num_threads` for your CPU
+3. **Optimize Buffer Sizes**: Balance latency vs. stability
+4. **Use GPU**: Set `device = "cuda"` if you have a compatible GPU
+
+### Expected Performance
+
+- **Latency**: 1-3 seconds end-to-end (depending on audio chunk size)
+- **CPU Usage**: 10-30% on modern CPUs
+- **Memory Usage**: 2-4 GB (mainly for models)
+- **Accuracy**: Varies by language and audio quality
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests for new functionality
+5. Submit a pull request
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Acknowledgments
+
+- [VOSK](https://alphacephei.com/vosk/) for offline speech recognition
+- [CTranslate2](https://github.com/OpenNMT/CTranslate2) for fast translation
+- [VB-Audio](https://vb-audio.com/) for virtual audio cable
+- [NLLB-200](https://ai.meta.com/research/no-language-left-behind/) for multilingual translation 

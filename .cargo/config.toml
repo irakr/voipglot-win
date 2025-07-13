@@ -9,6 +9,17 @@ rustflags = [
     "-C", "link-arg=/SUBSYSTEM:CONSOLE"
 ]
 
+# Force all C++ dependencies to use static runtime library
+[env]
+# Force static runtime library for all C++ dependencies
+CXXFLAGS = "/MT"
+CFLAGS = "/MT"
+# Additional MSVC flags to ensure consistent runtime
+CXXFLAGS_DEBUG = "/MTd"
+CFLAGS_DEBUG = "/MTd"
+CXXFLAGS_RELEASE = "/MT"
+CFLAGS_RELEASE = "/MT"
+
 [profile.release]
 # Optimize for performance (slow build, fast runtime)
 opt-level = 3
