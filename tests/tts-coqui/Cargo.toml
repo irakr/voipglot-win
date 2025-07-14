@@ -11,7 +11,11 @@ cpal = "0.15.2"
 dasp = "0.11.0"
 
 # Coqui TTS bindings
-tts = "0.26.3"  # Updated to latest version
+coqui-tts = "0.2.0"
+
+# Configuration
+serde = { version = "1.0", features = ["derive"] }
+toml = "0.8"
 
 # Error handling
 anyhow = "1.0.80"
@@ -19,6 +23,12 @@ anyhow = "1.0.80"
 # Simple logging
 env_logger = "0.10.0"
 log = "0.4.20"
+
+# Signal handling
+ctrlc = "3.4"
+
+# Date and time formatting
+chrono = { version = "0.4", features = ["serde"] }
 
 [build-dependencies]
 cc = "1.0"
