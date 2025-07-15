@@ -3,7 +3,8 @@
 [audio]
 # Audio device settings - leave empty for default devices
 input_device = "Microphone Array (Realtek(R) Audio)"  # Input device name (optional, for future use)
-output_device = "CABLE Input (VB-Audio Virtual Cable)"  # Output device name (leave empty for default)
+output_device = ""
+# output_device = "CABLE Input (VB-Audio Virtual Cable)"  # Output device name (leave empty for default)
 sample_rate = 48000  # Sample rate in Hz
 channels = 2  # Number of audio channels (2 = stereo)
 buffer_size = 4096  # Increased buffer size for better CPU performance
