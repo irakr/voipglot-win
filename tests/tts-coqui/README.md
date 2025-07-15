@@ -7,6 +7,10 @@ This is a proof-of-concept application demonstrating real-time Text-to-Speech (T
 
 1. Rust toolchain (2021 edition or later)
 2. Coqui TTS models (optional, will use default if not specified)
+   NOTE: By default, on Windows, Coqui TTS models are downloaded at either of the paths:
+   - %USERPROFILE%\.cache\tts\
+   - %USERPROFILE%\AppData\Local\tts\
+   - %USERPROFILE%\AppData\Local\Programs\Python\Python*\Lib\site-packages\TTS\models\
 3. Working audio output device
 
 ## Building the Application
