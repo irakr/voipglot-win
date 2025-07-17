@@ -1,6 +1,15 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Deserializer};
 use std::collections::HashMap;
 use crate::error::{Result, VoipGlotError};
+
+// Custom deserialization function to convert empty strings to None
+fn deserialize_optional_string<'de, D>(deserializer: D) -> std::result::Result<Option<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s: Option<String> = Option::deserialize(deserializer)?;
+    Ok(s.filter(|s| !s.trim().is_empty()))
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
@@ -14,7 +23,9 @@ pub struct AppConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AudioConfig {
+    #[serde(deserialize_with = "deserialize_optional_string")]
     pub input_device: Option<String>,
+    #[serde(deserialize_with = "deserialize_optional_string")]
     pub output_device: Option<String>,
     pub sample_rate: u32,
     pub channels: u16,

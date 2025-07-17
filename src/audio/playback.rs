@@ -62,21 +62,35 @@ impl AudioPlayback {
             warn!("Configured output device '{}' not found", device_name);
         }
         
-        // Try to find VB Cable device if configured
-        if config.vb_cable_device.is_empty() {
+        // If output_device is None (empty string in config), use system default
+        // Only use VB Cable as fallback if output_device was explicitly set but not found
+        if config.output_device.is_none() {
+            // Use default output device when no specific device is configured
+            let default_device = host.default_output_device();
+            if let Some(device) = &default_device {
+                if let Ok(name) = device.name() {
+                    info!("Using default output device: {}", name);
+                }
+            }
+            return Ok(default_device);
+        }
+        
+        // Only try VB Cable as fallback if output_device was specified but not found
+        if !config.vb_cable_device.is_empty() {
             for (device, name) in &device_list {
-                if name.contains("CABLE Input") || name.contains("VB-Audio") {
-                    info!("Found VB Cable device: {}", name);
+                if name.contains(&config.vb_cable_device) {
+                    info!("Falling back to VB Cable device: {}", name);
                     return Ok(Some(device.clone()));
                 }
             }
+            warn!("Configured VB Cable device '{}' not found", config.vb_cable_device);
         }
         
-        // Use default output device
+        // Final fallback to default output device
         let default_device = host.default_output_device();
         if let Some(device) = &default_device {
             if let Ok(name) = device.name() {
-                info!("Using default output device: {}", name);
+                info!("Using default output device as final fallback: {}", name);
             }
         }
         

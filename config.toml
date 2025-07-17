@@ -3,7 +3,7 @@
 [audio]
 # Audio device settings
 input_device = "Microphone Array (Realtek(R) Audio)"  # Set to specific device name or leave empty for default
-output_device = "CABLE Input (VB-Audio Virtual Cable)"  # Set to specific device name or leave empty for default
+output_device = ""  # Set to specific device name or leave empty for default
 sample_rate = 16000   # Sample rate in Hz (VOSK works best with 16kHz)
 channels = 1          # Number of audio channels (1 = mono for VOSK)
 buffer_size = 1024    # Audio buffer size in samples (reduced for lower latency)
