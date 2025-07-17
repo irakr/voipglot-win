@@ -15,14 +15,14 @@ VoipGlot Windows is a real-time audio translation application designed for gamin
 The application implements the following pipeline:
 
 ```
-(Microphone) → [VoipGlot] → [VOSK STT] → [CT2 Translation] → [Custom TTS] → (VB Cable Output)
+(Microphone) → [VoipGlot] → [VOSK STT] → [CT2 Translation] → [Coqui TTS] → (VB Cable Output)
 ```
 
 ### Components
 
 1. **VOSK Speech-to-Text**: Offline speech recognition using VOSK models
 2. **CTranslate2 Translation**: Fast neural machine translation using NLLB-200
-3. **Custom Text-to-Speech**: Simple audio synthesis (placeholder for future TTS engines)
+3. **Coqui TTS**: High-quality text-to-speech synthesis using Coqui TTS models
 4. **Audio Processing**: Real-time audio capture and playback with VB Cable support
 
 ## Prerequisites
@@ -32,11 +32,13 @@ The application implements the following pipeline:
 1. **VB-Audio Virtual Cable**: Download and install from [VB-Audio](https://vb-audio.com/Cable/)
 2. **Visual Studio 2022**: For building the Rust application
 3. **Rust Toolchain**: Latest stable Rust version
+4. **Python 3.7+**: Required for Coqui TTS (automatically installed by build script)
 
 ### Required Models
 
 1. **VOSK Model**: `vosk-model-small-en-us-0.15` (automatically downloaded)
 2. **CT2 Model**: NLLB-200 model converted to CT2 format (manual download required)
+3. **Coqui TTS Model**: `tts_models/en/ljspeech/fast_pitch` (automatically downloaded on first use)
 
 ## Installation
 
@@ -112,11 +114,13 @@ max_batch_size = 32
 beam_size = 4
 
 [tts]
-provider = "custom"
+provider = "coqui"
+model_path = "tts_models/en/ljspeech/fast_pitch"
 sample_rate = 22050
 channels = 1
 voice_speed = 1.0
 voice_pitch = 1.0
+enable_gpu = false
 
 [processing]
 chunk_duration_ms = 1000
@@ -158,7 +162,7 @@ voipglot-win.exe --source-lang en --target-lang fr
 
 ### Supported Languages
 
-The application supports 200+ languages through the NLLB-200 model. Common language codes:
+The application supports 200+ languages through the NLLB-200 model for translation. Common language codes:
 
 - `en`: English
 - `es`: Spanish
@@ -170,6 +174,8 @@ The application supports 200+ languages through the NLLB-200 model. Common langu
 - `ja`: Japanese
 - `ko`: Korean
 - `zh`: Chinese
+
+**Note**: Currently, Text-to-Speech (TTS) only supports English. Translation will work for all supported languages, but speech synthesis will be in English. This limitation will be addressed in future updates.
 
 ## Troubleshooting
 

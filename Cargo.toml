@@ -60,6 +60,9 @@ vosk = "0.2.0"
 # CTranslate2 for translation
 ct2rs = { version = "0.9", features = ["default"] }
 
+# Coqui TTS bindings
+coqui-tts = "0.2.0"
+
 # Simple logging for compatibility
 env_logger = "0.10.0"
 log = "0.4.20"
@@ -73,6 +76,7 @@ windows = { version = "=0.56.0", features = [
 
 [build-dependencies]
 cc = "1.0"
+pyo3-build-config = "0.20"
 
 [dev-dependencies]
 tokio-test = "=0.4.3"

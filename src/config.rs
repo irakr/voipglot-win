@@ -46,10 +46,12 @@ pub struct TranslationConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TtsConfig {
     pub provider: String,
+    pub model_path: String,
     pub sample_rate: u32,
     pub channels: u16,
     pub voice_speed: f32,
     pub voice_pitch: f32,
+    pub enable_gpu: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -135,11 +137,13 @@ impl Default for TranslationConfig {
 impl Default for TtsConfig {
     fn default() -> Self {
         Self {
-            provider: "custom".to_string(),
+            provider: "coqui".to_string(),
+            model_path: "tts_models/en/ljspeech/tacotron2-DDC".to_string(),
             sample_rate: 22050,
             channels: 1,
             voice_speed: 1.0,
             voice_pitch: 1.0,
+            enable_gpu: false,
         }
     }
 }

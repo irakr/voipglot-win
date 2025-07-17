@@ -67,6 +67,7 @@ if (-not (Test-Path "models")) {
 
 $voskPath = "models/vosk-model-small-en-us-0.15"
 $ct2Path = "models/nllb-200-ct2"
+$coquiPath = "tts_models/en/ljspeech/tacotron2-DDC"
 $allModelsPresent = $true
 
 # Check VOSK model
@@ -132,6 +133,11 @@ if (-not (Test-Path $ct2Path)) {
 } else {
     Write-Host "CT2 model found: $ct2Path" -ForegroundColor Green
 }
+
+# Note: Coqui TTS models are downloaded automatically at runtime, not required at build time
+Write-Host "Coqui TTS model: Will be downloaded automatically on first use" -ForegroundColor Green
+Write-Host "  - Model path: $coquiPath" -ForegroundColor Gray
+Write-Host "  - No build-time setup required" -ForegroundColor Gray
 
 if (-not $allModelsPresent) {
     Write-Host "" 

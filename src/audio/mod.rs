@@ -6,6 +6,8 @@ use crate::config::AudioConfig;
 use crate::error::Result;
 use crate::translation::Translator;
 use tracing::{info, error, debug};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 pub use capture::AudioCapture;
 pub use playback::AudioPlayback;
@@ -16,6 +18,7 @@ pub struct AudioManager {
     capture: Option<AudioCapture>,
     playback: Option<AudioPlayback>,
     processor: AudioProcessor,
+    shutdown_signal: Arc<AtomicBool>,
 }
 
 impl AudioManager {
@@ -29,10 +32,15 @@ impl AudioManager {
             capture: None,
             playback: None,
             processor,
+            shutdown_signal: Arc::new(AtomicBool::new(false)),
         })
     }
 
-    pub async fn start_processing(&mut self, translator: Translator) -> Result<()> {
+    pub fn set_shutdown_signal(&mut self, shutdown_signal: Arc<AtomicBool>) {
+        self.shutdown_signal = shutdown_signal;
+    }
+
+    pub async fn start_processing(&mut self, mut translator: Translator) -> Result<()> {
         info!("Starting audio processing pipeline");
         
         // Initialize audio capture
@@ -44,12 +52,12 @@ impl AudioManager {
         info!("Audio playback initialized");
         
         // Start the processing loop
-        self.run_processing_loop(translator).await?;
+        self.run_processing_loop(&mut translator).await?;
         
         Ok(())
     }
 
-    async fn run_processing_loop(&mut self, translator: Translator) -> Result<()> {
+    async fn run_processing_loop(&mut self, translator: &mut Translator) -> Result<()> {
         info!("Starting audio processing loop");
         
         let capture = self.capture.as_mut()
@@ -66,12 +74,18 @@ impl AudioManager {
         
         // Main processing loop
         loop {
+            // Check for shutdown signal
+            if self.shutdown_signal.load(Ordering::Relaxed) {
+                info!("Shutdown signal received, stopping audio processing");
+                break;
+            }
+            
             match capture.read_audio_chunk().await {
                 Ok(audio_data) => {
                     debug!("Received audio chunk of {} samples", audio_data.len());
                     
                     // Process the audio through the translation pipeline
-                    match self.processor.process_audio(audio_data, &translator).await {
+                    match self.processor.process_audio(audio_data, translator).await {
                         Ok(translated_audio) => {
                             if let Some(translated_audio) = translated_audio {
                                 debug!("Sending translated audio to playback");

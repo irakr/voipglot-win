@@ -27,7 +27,7 @@ impl AudioProcessor {
     pub async fn process_audio(
         &mut self,
         audio_data: Vec<f32>,
-        translator: &Translator,
+        translator: &mut Translator,
     ) -> Result<Option<Vec<f32>>> {
         debug!("Processing audio chunk of {} samples", audio_data.len());
         

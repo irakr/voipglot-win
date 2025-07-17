@@ -6,8 +6,8 @@ input_device = "Microphone Array (Realtek(R) Audio)"  # Set to specific device n
 output_device = "CABLE Input (VB-Audio Virtual Cable)"  # Set to specific device name or leave empty for default
 sample_rate = 16000   # Sample rate in Hz (VOSK works best with 16kHz)
 channels = 1          # Number of audio channels (1 = mono for VOSK)
-buffer_size = 2048    # Audio buffer size in samples
-latency_ms = 100      # Target latency in milliseconds
+buffer_size = 1024    # Audio buffer size in samples (reduced for lower latency)
+latency_ms = 50       # Target latency in milliseconds (reduced for better responsiveness)
 
 # VB Cable device configuration
 vb_cable_device = "CABLE Input (VB-Audio Virtual Cable)"  # VB Cable input device name
@@ -31,19 +31,21 @@ max_batch_size = 32  # Maximum batch size for translation
 beam_size = 4  # Beam size for beam search
 
 [tts]
-# Custom Text-to-Speech settings
-provider = "custom"  # TTS provider: custom
-sample_rate = 22050  # TTS output sample rate
+# Coqui TTS settings (Updated to match successful test implementation)
+provider = "coqui"  # TTS provider: coqui
+model_path = "tts_models/en/ljspeech/fast_pitch"  # Path to Coqui TTS model
+sample_rate = 22050  # TTS output sample rate (matches test implementation)
 channels = 1  # TTS output channels (mono)
 voice_speed = 1.0  # Voice speed multiplier
 voice_pitch = 1.0  # Voice pitch multiplier
+enable_gpu = false  # Enable GPU acceleration (requires CUDA)
 
 [processing]
 # Audio processing settings
-chunk_duration_ms = 500   # Duration of audio chunks to process
-silence_threshold = 0.01  # Threshold for silence detection
-noise_reduction = true    # Enable noise reduction
-echo_cancellation = true  # Enable echo cancellation
+chunk_duration_ms = 300   # Duration of audio chunks to process (reduced for better responsiveness)
+silence_threshold = 0.015  # Threshold for silence detection (slightly higher to reduce false triggers)
+noise_reduction = false   # Disable noise reduction for better performance
+echo_cancellation = false # Disable echo cancellation for better performance
 
 [logging]
 # Logging configuration

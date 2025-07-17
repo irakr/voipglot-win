@@ -4,7 +4,7 @@ pub mod tts;
 
 use crate::error::{Result, VoipGlotError};
 use crate::config::{SttConfig, TranslationConfig, TtsConfig};
-use tracing::{info, error, debug};
+use tracing::{info, error, debug, warn};
 
 pub use stt::SpeechToText;
 pub use translator_api::TranslationApi;
@@ -26,6 +26,11 @@ impl Translator {
         let translator = TranslationApi::new(translation_config.clone())?;
         let tts = TextToSpeech::new(tts_config)?;
         
+        // Inform user about TTS language support
+        if translation_config.target_language != "en" {
+            info!("Note: TTS currently supports English only. Translation will work, but speech synthesis will be in English.");
+        }
+        
         Ok(Self {
             source_language: translation_config.source_language.clone(),
             target_language: translation_config.target_language.clone(),
@@ -45,11 +50,17 @@ impl Translator {
             return Ok(String::new());
         }
         
+        // Skip translation if source and target languages are the same
+        if self.source_language == self.target_language {
+            debug!("Source and target languages are the same ({}), skipping translation", self.source_language);
+            return Ok(text.to_string());
+        }
+        
         debug!("Translating text: '{}'", text);
         self.translator.translate(text, &self.source_language, &self.target_language).await
     }
 
-    pub async fn text_to_speech(&self, text: &str) -> Result<Vec<f32>> {
+    pub async fn text_to_speech(&mut self, text: &str) -> Result<Vec<f32>> {
         if text.trim().is_empty() {
             return Ok(Vec::new());
         }
@@ -58,7 +69,7 @@ impl Translator {
         self.tts.synthesize(text).await
     }
 
-    pub async fn process_audio_pipeline(&self, audio_data: Vec<f32>) -> Result<Option<Vec<f32>>> {
+    pub async fn process_audio_pipeline(&mut self, audio_data: Vec<f32>) -> Result<Option<Vec<f32>>> {
         debug!("Processing audio pipeline with {} samples", audio_data.len());
         
         // Step 1: Speech to Text
@@ -70,7 +81,7 @@ impl Translator {
         
         info!("Transcribed: '{}'", transcribed_text);
         
-        // Step 2: Translation
+        // Step 2: Translation (skip if same language)
         let translated_text = self.translate_text(&transcribed_text).await?;
         if translated_text.is_empty() {
             debug!("Translation failed or produced empty result");
@@ -79,14 +90,24 @@ impl Translator {
         
         info!("Translated: '{}' -> '{}'", transcribed_text, translated_text);
         
-        // Step 3: Text to Speech
+        // Step 3: Set TTS language only if needed (optimized)
+        if self.source_language != self.target_language {
+            debug!("Setting TTS language to target language: {}", self.target_language);
+            if let Err(e) = self.tts.set_language(self.target_language.clone()) {
+                warn!("Failed to set TTS language to {}: {}, using current language", self.target_language, e);
+            }
+        }
+        
+        // Step 4: Text to Speech
         let synthesized_audio = self.text_to_speech(&translated_text).await?;
         if synthesized_audio.is_empty() {
             debug!("TTS failed or produced empty audio");
             return Ok(None);
         }
         
-        info!("Synthesized {} samples of audio", synthesized_audio.len());
+        // Note: Currently only English TTS is fully supported
+        let tts_language = if self.target_language == "en" { "English" } else { "English (translation will be in English)" };
+        info!("Synthesized {} samples of audio in {}", synthesized_audio.len(), tts_language);
         Ok(Some(synthesized_audio))
     }
 

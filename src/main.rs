@@ -3,6 +3,9 @@ use clap::Parser;
 use tracing::{info, error, Level};
 use tracing_subscriber;
 use cpal::traits::{HostTrait, DeviceTrait};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::io::{Write, Seek};
 
 mod audio;
 mod translation;
@@ -39,17 +42,49 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Set up panic hook to capture crash logs
+    std::panic::set_hook(Box::new(|panic_info| {
+        let msg = if let Some(s) = panic_info.payload().downcast_ref::<&str>() {
+            s
+        } else if let Some(s) = panic_info.payload().downcast_ref::<String>() {
+            s
+        } else {
+            "Unknown panic"
+        };
+        
+        let location = if let Some(location) = panic_info.location() {
+            format!("{}:{}:{}", location.file(), location.line(), location.column())
+        } else {
+            "Unknown location".to_string()
+        };
+        
+        eprintln!("PANIC: {} at {}", msg, location);
+        
+        // Try to write to log file if it exists
+        if let Ok(mut file) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open("voipglot.log") {
+            let _ = writeln!(file, "PANIC: {} at {}", msg, location);
+            let _ = file.flush();
+        }
+    }));
+    
     let args = Args::parse();
     
     // Load configuration first to get logging settings
-    let config = AppConfig::load(&args.config)?;
+    let mut config = AppConfig::load(&args.config)?;
+    
+    // Override configuration with command line arguments
+    config.translation.source_language = args.source_lang.clone();
+    config.translation.target_language = args.target_lang.clone();
     
     // Initialize logging based on configuration
     init_logging(&config, args.debug)?;
     
     info!("Starting VoipGlot Windows Audio Translation App");
-    info!("Source language: {}", args.source_lang);
-    info!("Target language: {}", args.target_lang);
+    info!("Source language: {}", config.translation.source_language);
+    info!("Target language: {}", config.translation.target_language);
     info!("Configuration loaded successfully");
     
     // List devices if requested
@@ -66,7 +101,7 @@ async fn main() -> Result<()> {
     info!("Audio manager initialized");
     
     // Start the audio processing pipeline
-    match run_audio_pipeline(&mut audio_manager, config).await {
+    let result = match run_audio_pipeline(&mut audio_manager, config.clone()).await {
         Ok(_) => {
             info!("Audio pipeline completed successfully");
             Ok(())
@@ -75,7 +110,20 @@ async fn main() -> Result<()> {
             error!("Audio pipeline failed: {}", e);
             Err(e)
         }
+    };
+    
+    // Ensure logs are flushed before exit
+    if let Some(log_file) = &config.logging.log_file {
+        if let Ok(mut file) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(log_file) {
+            let _ = writeln!(file, "Application shutting down");
+            let _ = file.flush();
+        }
     }
+    
+    result
 }
 
 fn list_audio_devices() -> Result<()> {
@@ -184,7 +232,7 @@ async fn run_audio_pipeline(
     config: AppConfig,
 ) -> Result<()> {
     info!("Starting audio processing pipeline");
-    
+
     // Initialize translation components
     let translator = translation::Translator::new(
         config.stt,
@@ -192,17 +240,30 @@ async fn run_audio_pipeline(
         config.tts,
     )?;
     info!("Translation engine initialized");
-    
-    // Start audio capture and processing
-    audio_manager.start_processing(translator).await?;
-    
-    // Keep the application running
-    tokio::signal::ctrl_c().await?;
-    info!("Received shutdown signal");
-    
-    // Stop audio processing
+
+    // Create shutdown signal
+    let shutdown_signal = Arc::new(AtomicBool::new(false));
+    let shutdown_signal_clone = shutdown_signal.clone();
+    audio_manager.set_shutdown_signal(shutdown_signal_clone);
+
+    let mut translator = translator; // make mutable
+
+    tokio::select! {
+        res = audio_manager.start_processing(translator) => {
+            if let Err(e) = res {
+                error!("Audio processing failed: {}", e);
+            }
+        }
+        _ = tokio::signal::ctrl_c() => {
+            info!("Received shutdown signal");
+            shutdown_signal.store(true, Ordering::Relaxed);
+            
+            // Give some time for graceful shutdown
+            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        }
+    }
+
     audio_manager.stop()?;
-    
     Ok(())
 }
 
@@ -211,6 +272,7 @@ fn init_logging(config: &AppConfig, debug_flag: bool) -> Result<()> {
     use tracing_subscriber::layer::SubscriberExt;
     use tracing_subscriber::util::SubscriberInitExt;
     use std::fs::OpenOptions;
+    use std::fs;
     
     // Determine log level
     let log_level = if debug_flag {
@@ -228,18 +290,44 @@ fn init_logging(config: &AppConfig, debug_flag: bool) -> Result<()> {
     
     // Create file layer if configured
     if let Some(log_file) = &config.logging.log_file {
+        // Remove existing log file to start fresh
+        if fs::metadata(log_file).is_ok() {
+            if let Err(e) = fs::remove_file(log_file) {
+                eprintln!("Warning: Failed to remove existing log file '{}': {}", log_file, e);
+            }
+        }
+        
+        // Test if we can write to the log file
         match OpenOptions::new()
             .create(true)
-            .append(true)
+            .write(true)
+            .truncate(true)
             .open(log_file) {
-            Ok(file) => {
-                // Initialize with both console and file output
-                tracing_subscriber::registry()
-                    .with(fmt::layer().with_ansi(false))
-                    .with(fmt::layer().with_ansi(false).with_writer(file))
-                    .init();
-                
-                info!("Logging initialized with console and file output: {}", log_file);
+            Ok(mut test_file) => {
+                // Test write access
+                if let Err(e) = writeln!(test_file, "Log file test write") {
+                    eprintln!("Warning: Cannot write to log file '{}': {}", log_file, e);
+                    // Fallback to console only
+                    tracing_subscriber::fmt()
+                        .with_max_level(log_level)
+                        .with_ansi(false)
+                        .init();
+                    
+                    error!("Failed to write to log file '{}': {}", log_file, e);
+                    info!("Logging to console only");
+                } else {
+                    // Reset file for actual logging
+                    test_file.set_len(0).ok();
+                    test_file.seek(std::io::SeekFrom::Start(0)).ok();
+                    
+                    // Initialize with both console and file output
+                    tracing_subscriber::registry()
+                        .with(fmt::layer().with_ansi(false))
+                        .with(fmt::layer().with_ansi(false).with_writer(test_file))
+                        .init();
+                    
+                    info!("Logging initialized with console and file output: {}", log_file);
+                }
             }
             Err(e) => {
                 // Fallback to console only if file creation fails
