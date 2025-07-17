@@ -32,12 +32,36 @@ struct Args {
     list_devices: bool,
     
     /// Source language for speech recognition
-    #[arg(short, long, default_value = "en")]
-    source_lang: String,
+    #[arg(short, long)]
+    source_lang: Option<String>,
     
     /// Target language for translation
-    #[arg(short, long, default_value = "es")]
-    target_lang: String,
+    #[arg(short, long)]
+    target_lang: Option<String>,
+    
+    /// Audio sample rate (Hz) - must be supported by your audio device
+    #[arg(long)]
+    sample_rate: Option<u32>,
+    
+    /// Audio channels (1 for mono, 2 for stereo)
+    #[arg(long)]
+    channels: Option<u16>,
+    
+    /// Audio buffer size in samples
+    #[arg(long)]
+    buffer_size: Option<usize>,
+    
+    /// Target latency in milliseconds
+    #[arg(long)]
+    latency_ms: Option<u32>,
+    
+    /// Silence threshold for voice detection
+    #[arg(long)]
+    silence_threshold: Option<f32>,
+    
+    /// Chunk duration in milliseconds
+    #[arg(long)]
+    chunk_duration_ms: Option<u32>,
 }
 
 #[tokio::main]
@@ -72,12 +96,26 @@ async fn main() -> Result<()> {
     
     let args = Args::parse();
     
+    // Show help if no arguments provided
+    if std::env::args().count() == 1 {
+        println!("VoipGlot Windows Audio Translation App");
+        println!("Usage: voipglot-win [OPTIONS]");
+        println!();
+        println!("Examples:");
+        println!("  voipglot-win                                    # Run with default config");
+        println!("  voipglot-win --source-lang en --target-lang es  # English to Spanish");
+        println!("  voipglot-win --sample-rate 48000               # Use 48kHz sample rate");
+        println!("  voipglot-win --list-devices                    # List audio devices");
+        println!();
+        println!("Use --help for all available options");
+        println!();
+    }
+    
     // Load configuration first to get logging settings
     let mut config = AppConfig::load(&args.config)?;
     
-    // Override configuration with command line arguments
-    config.translation.source_language = args.source_lang.clone();
-    config.translation.target_language = args.target_lang.clone();
+    // Validate and override configuration with command line arguments
+    validate_and_override_config(&mut config, &args)?;
     
     // Initialize logging based on configuration
     init_logging(&config, args.debug)?;
@@ -97,7 +135,7 @@ async fn main() -> Result<()> {
     validate_vb_cable_device(&config)?;
     
     // Initialize audio manager
-    let mut audio_manager = AudioManager::new(config.audio.clone())?;
+    let mut audio_manager = AudioManager::new(config.audio.clone(), config.processing.clone())?;
     info!("Audio manager initialized");
     
     // Start the audio processing pipeline
@@ -124,6 +162,220 @@ async fn main() -> Result<()> {
     }
     
     result
+}
+
+fn validate_and_override_config(config: &mut AppConfig, args: &Args) -> Result<()> {
+    // Validate and override language settings
+    if let Some(source_lang) = &args.source_lang {
+        validate_language_code(source_lang)?;
+        config.translation.source_language = source_lang.clone();
+    }
+    
+    if let Some(target_lang) = &args.target_lang {
+        validate_language_code(target_lang)?;
+        config.translation.target_language = target_lang.clone();
+    }
+    
+    // Validate and override audio settings
+    if let Some(sample_rate) = args.sample_rate {
+        validate_sample_rate(sample_rate)?;
+        config.audio.sample_rate = sample_rate;
+        config.stt.sample_rate = sample_rate as f32;
+        config.tts.sample_rate = sample_rate;
+    }
+    
+    if let Some(channels) = args.channels {
+        validate_channels(channels)?;
+        config.audio.channels = channels;
+        config.tts.channels = channels;
+    }
+    
+    if let Some(buffer_size) = args.buffer_size {
+        validate_buffer_size(buffer_size)?;
+        config.audio.buffer_size = buffer_size;
+    }
+    
+    if let Some(latency_ms) = args.latency_ms {
+        validate_latency(latency_ms)?;
+        config.audio.latency_ms = latency_ms;
+    }
+    
+    if let Some(silence_threshold) = args.silence_threshold {
+        validate_silence_threshold(silence_threshold)?;
+        config.processing.silence_threshold = silence_threshold;
+    }
+    
+    if let Some(chunk_duration_ms) = args.chunk_duration_ms {
+        validate_chunk_duration(chunk_duration_ms)?;
+        config.processing.chunk_duration_ms = chunk_duration_ms;
+    }
+    
+    // Adapt configuration to actual device capabilities
+    adapt_to_device_capabilities(config)?;
+    
+    Ok(())
+}
+
+fn validate_language_code(lang: &str) -> Result<()> {
+    let valid_languages = ["en", "es", "fr", "de", "it", "pt", "ru", "ja", "ko", "zh"];
+    if !valid_languages.contains(&lang) {
+        return Err(VoipGlotError::Configuration(
+            format!("Invalid language code '{}'. Supported languages: {}", 
+                   lang, valid_languages.join(", "))
+        ).into());
+    }
+    Ok(())
+}
+
+fn validate_sample_rate(sample_rate: u32) -> Result<()> {
+    let valid_rates = [8000, 16000, 22050, 32000, 44100, 48000];
+    if !valid_rates.contains(&sample_rate) {
+        return Err(VoipGlotError::Configuration(
+            format!("Invalid sample rate {} Hz. Supported rates: {}", 
+                   sample_rate, valid_rates.iter().map(|r| r.to_string()).collect::<Vec<_>>().join(", "))
+        ).into());
+    }
+    Ok(())
+}
+
+fn validate_channels(channels: u16) -> Result<()> {
+    if channels != 1 && channels != 2 {
+        return Err(VoipGlotError::Configuration(
+            format!("Invalid channel count {}. Must be 1 (mono) or 2 (stereo)", channels)
+        ).into());
+    }
+    Ok(())
+}
+
+fn validate_buffer_size(buffer_size: usize) -> Result<()> {
+    if buffer_size < 256 || buffer_size > 16384 {
+        return Err(VoipGlotError::Configuration(
+            format!("Invalid buffer size {}. Must be between 256 and 16384", buffer_size)
+        ).into());
+    }
+    Ok(())
+}
+
+fn validate_latency(latency_ms: u32) -> Result<()> {
+    if latency_ms < 10 || latency_ms > 1000 {
+        return Err(VoipGlotError::Configuration(
+            format!("Invalid latency {} ms. Must be between 10 and 1000", latency_ms)
+        ).into());
+    }
+    Ok(())
+}
+
+fn validate_silence_threshold(threshold: f32) -> Result<()> {
+    if threshold < 0.001 || threshold > 1.0 {
+        return Err(VoipGlotError::Configuration(
+            format!("Invalid silence threshold {}. Must be between 0.001 and 1.0", threshold)
+        ).into());
+    }
+    Ok(())
+}
+
+fn validate_chunk_duration(duration_ms: u32) -> Result<()> {
+    if duration_ms < 50 || duration_ms > 5000 {
+        return Err(VoipGlotError::Configuration(
+            format!("Invalid chunk duration {} ms. Must be between 50 and 5000", duration_ms)
+        ).into());
+    }
+    Ok(())
+}
+
+fn adapt_to_device_capabilities(config: &mut AppConfig) -> Result<()> {
+    info!("Adapting configuration to actual device capabilities");
+    
+    let host = cpal::default_host();
+    
+    // Get input device capabilities
+    if let Ok(devices) = host.input_devices() {
+        for device in devices {
+            if let Ok(name) = device.name() {
+                if let Some(configured_device) = &config.audio.input_device {
+                    if name.contains(configured_device) {
+                        if let Ok(supported_config) = device.default_input_config() {
+                            info!("Input device '{}' supports: {:?}", name, supported_config);
+                            
+                            // Adapt sample rate if needed
+                            let device_sample_rate = supported_config.sample_rate().0;
+                            if config.audio.sample_rate != device_sample_rate {
+                                info!("Adapting sample rate from {} Hz to {} Hz (device capability)", 
+                                     config.audio.sample_rate, device_sample_rate);
+                                config.audio.sample_rate = device_sample_rate;
+                                config.stt.sample_rate = device_sample_rate as f32;
+                                config.tts.sample_rate = device_sample_rate;
+                            }
+                            
+                            // Adapt channels if needed
+                            let device_channels = supported_config.channels();
+                            if config.audio.channels != device_channels {
+                                info!("Adapting channels from {} to {} (device capability)", 
+                                     config.audio.channels, device_channels);
+                                config.audio.channels = device_channels;
+                                config.tts.channels = device_channels;
+                            }
+                            
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // Get output device capabilities
+    if let Ok(devices) = host.output_devices() {
+        for device in devices {
+            if let Ok(name) = device.name() {
+                if let Some(configured_device) = &config.audio.output_device {
+                    if name.contains(configured_device) {
+                        if let Ok(supported_config) = device.default_output_config() {
+                            info!("Output device '{}' supports: {:?}", name, supported_config);
+                            
+                            // Adapt sample rate if needed
+                            let device_sample_rate = supported_config.sample_rate().0;
+                            if config.audio.sample_rate != device_sample_rate {
+                                info!("Adapting sample rate from {} Hz to {} Hz (output device capability)", 
+                                     config.audio.sample_rate, device_sample_rate);
+                                config.audio.sample_rate = device_sample_rate;
+                                config.stt.sample_rate = device_sample_rate as f32;
+                                config.tts.sample_rate = device_sample_rate;
+                            }
+                            
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // If no specific device is configured, use default device capabilities
+    if config.audio.input_device.is_none() {
+        if let Some(default_device) = host.default_input_device() {
+            if let Ok(supported_config) = default_device.default_input_config() {
+                info!("Default input device supports: {:?}", supported_config);
+                
+                let device_sample_rate = supported_config.sample_rate().0;
+                if config.audio.sample_rate != device_sample_rate {
+                    info!("Adapting to default device sample rate: {} Hz", device_sample_rate);
+                    config.audio.sample_rate = device_sample_rate;
+                    config.stt.sample_rate = device_sample_rate as f32;
+                    config.tts.sample_rate = device_sample_rate;
+                }
+                
+                let device_channels = supported_config.channels();
+                if config.audio.channels != device_channels {
+                    info!("Adapting to default device channels: {}", device_channels);
+                    config.audio.channels = device_channels;
+                    config.tts.channels = device_channels;
+                }
+            }
+        }
+    }
+    
+    Ok(())
 }
 
 fn list_audio_devices() -> Result<()> {

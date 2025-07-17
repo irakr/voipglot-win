@@ -19,9 +19,16 @@ impl AudioProcessor {
         Ok(Self {
             config,
             audio_buffer: Arc::new(Mutex::new(Vec::new())),
-            silence_threshold: 0.01,
-            chunk_duration_ms: 1000,
+            silence_threshold: 0.02, // Will be overridden by config
+            chunk_duration_ms: 200,  // Will be overridden by config
         })
+    }
+
+    pub fn update_processing_config(&mut self, silence_threshold: f32, chunk_duration_ms: u32) {
+        self.silence_threshold = silence_threshold;
+        self.chunk_duration_ms = chunk_duration_ms;
+        info!("Updated processing config: silence_threshold={}, chunk_duration_ms={}", 
+              silence_threshold, chunk_duration_ms);
     }
 
     pub async fn process_audio(
@@ -42,14 +49,15 @@ impl AudioProcessor {
         buffer.extend(audio_data);
         
         // Check if we have enough audio for processing
-        let samples_needed = (self.config.sample_rate as u32 * self.chunk_duration_ms / 1000) as usize;
+        // Increased chunk duration for better stability and reduced CPU usage
+        let samples_needed = (self.config.sample_rate as u32 * 400 / 1000) as usize; // 400ms chunks
         
         if buffer.len() < samples_needed {
             // Only log occasionally to avoid spam
             static mut COUNTER: u32 = 0;
             unsafe {
                 COUNTER += 1;
-                if COUNTER % 50 == 0 {
+                if COUNTER % 200 == 0 { // Further reduced logging frequency
                     debug!("Not enough audio samples yet ({} < {})", buffer.len(), samples_needed);
                 }
             }
@@ -79,12 +87,14 @@ impl AudioProcessor {
     }
 
     fn contains_speech(&self, audio_data: &[f32]) -> bool {
-        // Simple energy-based speech detection
+        // Improved energy-based speech detection with better threshold
         let energy: f32 = audio_data.iter().map(|&x| x * x).sum::<f32>() / audio_data.len() as f32;
         let rms = energy.sqrt();
         
-        debug!("Audio RMS: {}, threshold: {}", rms, self.silence_threshold);
-        rms > self.silence_threshold
+        // Use a slightly higher threshold to reduce false positives
+        let threshold = self.silence_threshold * 1.2;
+        debug!("Audio RMS: {}, threshold: {}", rms, threshold);
+        rms > threshold
     }
 
     pub fn set_silence_threshold(&mut self, threshold: f32) {

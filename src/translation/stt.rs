@@ -10,6 +10,7 @@ pub struct SpeechToText {
     model: Option<Model>,
     recognizer: Option<Arc<Mutex<Recognizer>>>,
     sample_rate: u32,
+    last_transcribed_text: String, // Track last transcribed text to prevent accumulation
 }
 
 impl SpeechToText {
@@ -46,15 +47,21 @@ impl SpeechToText {
         
         info!("VOSK recognizer created with sample rate: {}Hz", sample_rate);
         
-        Ok(Self {
+        let mut stt = Self {
             config,
             model: Some(model),
             recognizer: Some(Arc::new(Mutex::new(recognizer))),
             sample_rate,
-        })
+            last_transcribed_text: String::new(),
+        };
+        
+        // Warm up the recognizer to prevent empty text on first speech
+        stt.warm_up_recognizer()?;
+        
+        Ok(stt)
     }
 
-    pub async fn transcribe(&self, audio_data: Vec<f32>) -> Result<String> {
+    pub async fn transcribe(&mut self, audio_data: Vec<f32>) -> Result<String> {
         debug!("Transcribing audio with {} samples", audio_data.len());
         
         if audio_data.is_empty() {
@@ -85,8 +92,12 @@ impl SpeechToText {
                     
                     if let Some(text) = self.extract_text_from_result(&format!("{:?}", result)) {
                         if !text.is_empty() {
-                            info!("Transcribed text: '{}'", text);
-                            return Ok(text);
+                            let new_text = self.extract_new_text(&text);
+                            if !new_text.is_empty() {
+                                self.last_transcribed_text = text.clone();
+                                info!("Transcribed text: '{}' (new: '{}')", text, new_text);
+                                return Ok(new_text);
+                            }
                         }
                     }
                 },
@@ -97,13 +108,20 @@ impl SpeechToText {
                         
                         if let Some(text) = self.extract_text_from_result(&format!("{:?}", partial)) {
                             if !text.is_empty() {
-                                debug!("Partial transcription: '{}'", text);
-                                return Ok(text);
+                                let new_text = self.extract_new_text(&text);
+                                if !new_text.is_empty() {
+                                    debug!("Partial transcription: '{}' (new: '{}')", text, new_text);
+                                    return Ok(new_text);
+                                }
                             }
                         }
+                    } else {
+                        debug!("Partial results disabled, waiting for final result");
                     }
                 },
-                _ => {}
+                _ => {
+                    debug!("VOSK state: {:?}", state);
+                }
             }
         }
         
@@ -194,7 +212,68 @@ impl SpeechToText {
                 .ok_or_else(|| VoipGlotError::Audio("Failed to recreate VOSK recognizer".to_string()))?;
             
             self.recognizer = Some(Arc::new(Mutex::new(recognizer)));
-            info!("VOSK recognizer reset successfully");
+            self.last_transcribed_text.clear();
+            info!("VOSK recognizer reset successfully to clear accumulated text");
+        }
+        
+        Ok(())
+    }
+
+    pub fn clear_state(&mut self) -> Result<()> {
+        // Alternative method to clear recognizer state
+        // This is equivalent to reset() but with different logging
+        self.reset()
+    }
+
+    fn extract_new_text(&self, current_text: &str) -> String {
+        // Extract only the new part of the text that wasn't in the previous transcription
+        if self.last_transcribed_text.is_empty() {
+            return current_text.to_string();
+        }
+        
+        // If current text starts with the last transcribed text, extract the new part
+        if current_text.starts_with(&self.last_transcribed_text) {
+            let new_part = &current_text[self.last_transcribed_text.len()..];
+            if !new_part.trim().is_empty() {
+                return new_part.trim().to_string();
+            }
+        }
+        
+        // If the text is completely different, return the current text
+        if current_text != self.last_transcribed_text {
+            return current_text.to_string();
+        }
+        
+        // If current text is shorter than last text, it might be a partial result
+        // In this case, don't return anything to avoid confusion
+        if current_text.len() < self.last_transcribed_text.len() {
+            debug!("Current text shorter than last text, skipping: '{}' vs '{}'", current_text, self.last_transcribed_text);
+            return String::new();
+        }
+        
+        // No new text found
+        String::new()
+    }
+
+    pub fn clear_text_history(&mut self) {
+        self.last_transcribed_text.clear();
+        debug!("Cleared text history");
+    }
+    
+    fn warm_up_recognizer(&mut self) -> Result<()> {
+        debug!("Warming up VOSK recognizer to prevent empty text on first speech");
+        
+        let recognizer = self.recognizer.as_ref()
+            .ok_or_else(|| VoipGlotError::Audio("Recognizer not initialized".to_string()))?;
+        
+        // Create some silence audio (0.5 seconds at the sample rate)
+        let silence_samples = (self.sample_rate as f32 * 0.5) as usize;
+        let silence_audio: Vec<i16> = vec![0; silence_samples];
+        
+        // Process the silence to establish context
+        if let Ok(mut rec) = recognizer.lock() {
+            rec.accept_waveform(&silence_audio);
+            debug!("VOSK recognizer warmed up with {} silence samples", silence_samples);
         }
         
         Ok(())

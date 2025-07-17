@@ -18,9 +18,9 @@ impl TextToSpeech {
     pub fn new(config: TtsConfig) -> Result<Self> {
         info!("Initializing Coqui TTS with config: {:?}", config);
         
-        // Initialize language-specific model mapping
+        // Initialize language-specific model mapping - use fast_pitch for better performance
         let mut language_models = HashMap::new();
-        language_models.insert("en".to_string(), "tts_models/en/ljspeech/tacotron2-DDC".to_string());
+        language_models.insert("en".to_string(), "tts_models/en/ljspeech/fast_pitch".to_string());
         language_models.insert("es".to_string(), "tts_models/es/css10/vits".to_string());
         language_models.insert("fr".to_string(), "tts_models/fr/css10/vits".to_string());
         language_models.insert("de".to_string(), "tts_models/de/css10/vits".to_string());
@@ -34,7 +34,7 @@ impl TextToSpeech {
         let model_name = if !config.model_path.is_empty() {
             &config.model_path
         } else {
-            "tts_models/en/ljspeech/tacotron2-DDC"  // Default model
+            "tts_models/en/ljspeech/fast_pitch"  // Use fast_pitch for better performance
         };
         
         // Note: Don't check if model directory exists - let Coqui TTS handle model downloading automatically
@@ -50,12 +50,12 @@ impl TextToSpeech {
             }
             Err(e) => {
                 error!("Failed to initialize Coqui TTS synthesizer with model {}: {:?}", model_name, e);
-                // Try to fall back to a simpler model if the main one fails
+                // Try to fall back to fast_pitch model if the main one fails
                 match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    Synthesizer::new("tts_models/en/ljspeech/tacotron2-DDC", config.enable_gpu)
+                    Synthesizer::new("tts_models/en/ljspeech/fast_pitch", config.enable_gpu)
                 })) {
                     Ok(fallback_syn) => {
-                        info!("Successfully initialized fallback TTS model (tacotron2-DDC)");
+                        info!("Successfully initialized fallback TTS model (fast_pitch)");
                         Some(fallback_syn)
                     }
                     Err(e2) => {
@@ -73,7 +73,7 @@ impl TextToSpeech {
         Ok(Self {
             config: config.clone(),
             synthesizer,
-            sample_rate: config.sample_rate,
+            sample_rate: 22050, // Use TTS native sample rate to avoid resampling
             channels: config.channels,
             current_language: None,
             language_models,
@@ -96,66 +96,65 @@ impl TextToSpeech {
             }
         };
         
-        // Validate and sanitize input text
+        // Validate and sanitize input text - use PoC approach
         let text_to_speak = {
-            // Remove excessive whitespace and normalize text
-            let normalized = text.split_whitespace().collect::<Vec<_>>().join(" ");
-            
-            // Remove any non-printable characters that might cause issues
-            let sanitized = normalized.chars()
-                .filter(|c| c.is_ascii_graphic() || c.is_ascii_whitespace())
-                .collect::<String>();
-            
-            // Limit text length to prevent performance issues (reduced to 150 for better performance)
-            if sanitized.len() > 150 {
-                warn!("Text too long ({} chars), truncating to 150 characters for better performance", sanitized.len());
-                sanitized[..150].to_string()
-            } else {
-                sanitized
+            // Remove excessive whitespace and normalize
+            let cleaned = text.trim().replace("  ", " ");
+            if cleaned.is_empty() {
+                return Ok(Vec::new());
             }
+            cleaned
         };
-        
-        // Additional validation
-        if text_to_speak.trim().is_empty() {
-            warn!("Text became empty after sanitization, skipping synthesis");
-            return Ok(Vec::new());
-        }
         
         info!("Converting text to speech: '{}'", text_to_speak);
         
-        // Synthesize speech and get audio buffer with better error handling
         let start_time = std::time::Instant::now();
-        let audio_buffer = {
-            // Process in a separate scope to ensure memory is freed immediately
-            let text_clone = text_to_speak.clone();
-            let buffer = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                synthesizer.tts(&text_clone)
-            })) {
-                Ok(buffer) => buffer,
-                Err(e) => {
-                    error!("TTS synthesis panicked: {:?}", e);
-                    return Err(VoipGlotError::SynthesisError(format!("TTS synthesis panicked: {:?}", e)));
-                }
-            };
-            
-            if buffer.is_empty() {
-                error!("TTS synthesis returned empty audio buffer");
-                return Err(VoipGlotError::SynthesisError("TTS synthesis returned empty audio buffer".to_string()));
-            }
-            
-            // Normalize audio levels for consistent volume (matching test implementation)
-            let max_amplitude = buffer.iter().map(|&x| x.abs()).fold(0.0f32, f32::max);
-            if max_amplitude > 0.0 {
-                buffer.into_iter().map(|x| (x / max_amplitude) * 0.95).collect()
-            } else {
-                buffer
-            }
-        };
+        
+        // Synthesize speech using Coqui TTS
+        let audio = synthesizer.tts(&text_to_speak);
         
         let synthesis_time = start_time.elapsed();
-        info!("Speech synthesis completed in {:?}, got {} samples", synthesis_time, audio_buffer.len());
+        info!("Speech synthesis completed in {:?}, got {} samples", synthesis_time, audio.len());
         
-        Ok(audio_buffer)
+        // Convert audio to f32 samples and normalize
+        let mut samples: Vec<f32> = audio
+            .iter()
+            .map(|&sample| {
+                // Convert from i16 to f32 and normalize to [-1.0, 1.0] range
+                (sample as f32) / 32768.0
+            })
+            .collect();
+        
+        // Apply gentle normalization to prevent clipping while maintaining quality
+        if let Some(max_sample) = samples.iter().map(|&s| s.abs()).reduce(f32::max) {
+            if max_sample > 0.0 {
+                // Normalize to 90% of max to prevent clipping
+                let normalization_factor = 0.9 / max_sample;
+                for sample in &mut samples {
+                    *sample *= normalization_factor;
+                }
+                debug!("Applied normalization factor: {:.4}", normalization_factor);
+            }
+        }
+        
+        // Only resample if absolutely necessary (different sample rates)
+        if self.sample_rate != 22050 {
+            debug!("Resampling from 22050Hz to {}Hz", self.sample_rate);
+            samples = self.resample_audio(&samples, 22050, self.sample_rate);
+        }
+        
+        // Convert mono to stereo if needed (simple duplication)
+        if self.channels == 2 && samples.len() > 0 {
+            let mono_samples = samples.clone();
+            samples.clear();
+            for &sample in &mono_samples {
+                samples.push(sample); // Left channel
+                samples.push(sample); // Right channel
+            }
+            debug!("Converted mono to stereo: {} samples", samples.len());
+        }
+        
+        Ok(samples)
     }
 
     pub fn set_language(&mut self, language: String) -> Result<()> {
@@ -198,12 +197,12 @@ impl TextToSpeech {
                     error!("Failed to load language-specific model for {}: {:?}", language, e);
                     // Try to fall back to default model
                     match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                        Synthesizer::new("tts_models/en/ljspeech/tacotron2-DDC", self.config.enable_gpu)
+                        Synthesizer::new("tts_models/en/ljspeech/fast_pitch", self.config.enable_gpu)
                     })) {
                         Ok(default_syn) => {
                             self.synthesizer = Some(default_syn);
                             self.current_language = Some(language.clone());
-                            warn!("Fell back to default English model (tacotron2-DDC) for language: {}", language);
+                            warn!("Fell back to default English model (fast_pitch) for language: {}", language);
                         }
                         Err(e2) => {
                             error!("Failed to load default model as fallback: {:?}", e2);
@@ -274,6 +273,103 @@ impl TextToSpeech {
 
     pub fn is_initialized(&self) -> bool {
         self.synthesizer.is_some()
+    }
+
+    fn apply_pitch_shift(&self, audio: &[f32], pitch_factor: f32) -> Vec<f32> {
+        // Simple pitch shifting using resampling
+        // This is a basic implementation - for better quality, consider using a library like rubberband
+        if (pitch_factor - 1.0).abs() < 0.01 {
+            return audio.to_vec();
+        }
+        
+        let new_length = (audio.len() as f32 / pitch_factor) as usize;
+        let mut result = Vec::with_capacity(new_length);
+        
+        for i in 0..new_length {
+            let src_index = (i as f32 * pitch_factor) as usize;
+            if src_index < audio.len() {
+                result.push(audio[src_index]);
+            }
+        }
+        
+        result
+    }
+
+    fn apply_speed_change(&self, audio: &[f32], speed_factor: f32) -> Vec<f32> {
+        // Simple speed change using linear interpolation
+        if (speed_factor - 1.0).abs() < 0.01 {
+            return audio.to_vec();
+        }
+        
+        let new_length = (audio.len() as f32 * speed_factor) as usize;
+        let mut result = Vec::with_capacity(new_length);
+        
+        for i in 0..new_length {
+            let src_index = i as f32 / speed_factor;
+            let src_index_floor = src_index.floor() as usize;
+            let src_index_ceil = (src_index.ceil() as usize).min(audio.len() - 1);
+            let fraction = src_index - src_index_floor as f32;
+            
+            if src_index_floor < audio.len() {
+                let sample = if src_index_floor == src_index_ceil {
+                    audio[src_index_floor]
+                } else {
+                    audio[src_index_floor] * (1.0 - fraction) + audio[src_index_ceil] * fraction
+                };
+                result.push(sample);
+            }
+        }
+        
+        result
+    }
+
+    fn resample_audio(&self, audio: &[f32], from_rate: u32, to_rate: u32) -> Vec<f32> {
+        if from_rate == to_rate {
+            return audio.to_vec();
+        }
+        
+        // Use PoC's efficient resampling algorithm
+        let ratio = to_rate as f64 / from_rate as f64;
+        let samples_per_channel = audio.len() / self.channels as usize;
+        let new_samples_per_channel = (samples_per_channel as f64 * ratio) as usize;
+        let new_length = new_samples_per_channel * self.channels as usize;
+        let mut resampled = Vec::with_capacity(new_length);
+        
+        // Ultra-efficient resampling using linear interpolation
+        let mut src_pos = 0.0;
+        let step = 1.0 / ratio;
+        
+        for _ in 0..new_samples_per_channel {
+            let src_index = src_pos as usize;
+            let frac = src_pos - src_index as f64;
+            
+            if src_index < samples_per_channel - 1 {
+                // Linear interpolation between two samples
+                for ch in 0..self.channels as usize {
+                    let idx1 = src_index * self.channels as usize + ch;
+                    let idx2 = (src_index + 1) * self.channels as usize + ch;
+                    let sample1 = audio[idx1];
+                    let sample2 = audio[idx2];
+                    let interpolated = sample1 + (sample2 - sample1) * frac as f32;
+                    resampled.push(interpolated);
+                }
+            } else if src_index < samples_per_channel {
+                // Last sample, no interpolation needed
+                for ch in 0..self.channels as usize {
+                    let idx = src_index * self.channels as usize + ch;
+                    resampled.push(audio[idx]);
+                }
+            } else {
+                // Beyond source, pad with zeros
+                for _ in 0..self.channels as usize {
+                    resampled.push(0.0);
+                }
+            }
+            
+            src_pos += step;
+        }
+        
+        resampled
     }
 }
 

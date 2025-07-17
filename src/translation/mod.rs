@@ -40,7 +40,7 @@ impl Translator {
         })
     }
 
-    pub async fn speech_to_text(&self, audio_data: Vec<f32>) -> Result<String> {
+    pub async fn speech_to_text(&mut self, audio_data: Vec<f32>) -> Result<String> {
         debug!("Converting speech to text");
         self.stt.transcribe(audio_data).await
     }
@@ -81,6 +81,17 @@ impl Translator {
         
         info!("Transcribed: '{}'", transcribed_text);
         
+        // Reset STT recognizer to prevent text accumulation in subsequent processing
+        // This ensures each audio chunk is processed independently
+        // Only reset if we got actual transcribed text (not empty)
+        if !transcribed_text.trim().is_empty() {
+            if let Err(e) = self.stt.reset() {
+                warn!("Failed to reset STT recognizer: {}", e);
+            } else {
+                debug!("STT recognizer reset successfully to prevent text accumulation");
+            }
+        }
+        
         // Step 2: Translation (skip if same language)
         let translated_text = self.translate_text(&transcribed_text).await?;
         if translated_text.is_empty() {
@@ -98,8 +109,12 @@ impl Translator {
             }
         }
         
-        // Step 4: Text to Speech
-        let synthesized_audio = self.text_to_speech(&translated_text).await?;
+        // Step 4: Text to Speech (with timeout to prevent blocking)
+        let synthesized_audio = tokio::time::timeout(
+            std::time::Duration::from_secs(10), // 10 second timeout
+            self.text_to_speech(&translated_text)
+        ).await.map_err(|_| VoipGlotError::SynthesisError("TTS synthesis timeout".to_string()))??;
+        
         if synthesized_audio.is_empty() {
             debug!("TTS failed or produced empty audio");
             return Ok(None);
@@ -144,6 +159,22 @@ impl Translator {
     pub fn reset_stt(&mut self) -> Result<()> {
         debug!("Resetting STT recognizer");
         self.stt.reset()
+    }
+
+    pub fn reset_tts(&mut self) -> Result<()> {
+        debug!("Resetting TTS synthesizer");
+        // For now, TTS doesn't need reset, but we keep the method for consistency
+        Ok(())
+    }
+
+    pub fn force_reset_stt(&mut self) -> Result<()> {
+        debug!("Force resetting STT recognizer");
+        self.stt.reset()
+    }
+
+    pub fn clear_stt_history(&mut self) {
+        debug!("Clearing STT text history");
+        self.stt.clear_text_history();
     }
 }
 

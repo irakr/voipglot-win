@@ -4,10 +4,10 @@
 # Audio device settings
 input_device = "Microphone Array (Realtek(R) Audio)"  # Set to specific device name or leave empty for default
 output_device = ""  # Set to specific device name or leave empty for default
-sample_rate = 16000   # Sample rate in Hz (VOSK works best with 16kHz)
+sample_rate = 22050   # Sample rate in Hz (match TTS output to avoid resampling artifacts)
 channels = 1          # Number of audio channels (1 = mono for VOSK)
-buffer_size = 1024    # Audio buffer size in samples (reduced for lower latency)
-latency_ms = 50       # Target latency in milliseconds (reduced for better responsiveness)
+buffer_size = 4096    # Audio buffer size in samples (increased for better stability)
+latency_ms = 150      # Target latency in milliseconds (increased for better stability)
 
 # VB Cable device configuration
 vb_cable_device = "CABLE Input (VB-Audio Virtual Cable)"  # VB Cable input device name
@@ -16,36 +16,36 @@ vb_cable_device = "CABLE Input (VB-Audio Virtual Cable)"  # VB Cable input devic
 # VOSK Speech-to-Text settings
 provider = "vosk"  # STT provider: vosk
 model_path = "models/vosk-model-small-en-us-0.15"  # Path to VOSK model
-sample_rate = 16000.0  # VOSK model sample rate
-enable_partial_results = true  # Enable partial recognition results
+sample_rate = 22050.0  # VOSK model sample rate (match TTS rate for consistency)
+enable_partial_results = true  # Enable partial results for real-time transcription (text deduplication handles accumulation)
 
 [translation]
 # CTranslate2 translation settings
 provider = "ct2"  # Translation provider: ct2
 model_path = "models/nllb-200-ct2"  # Path to CT2 model
 source_language = "en"  # Source language code
-target_language = "es"  # Target language code
-num_threads = 4  # Number of translation threads
-device = "cpu"  # Use CPU or GPU (cpu or cuda)
-max_batch_size = 32  # Maximum batch size for translation
-beam_size = 4  # Beam size for beam search
+target_language = "en"  # Target language code
+num_threads = 2  # Number of threads for translation
+device = "cpu"  # Device to use: cpu, cuda
+max_batch_size = 16  # Maximum batch size for translation
+beam_size = 2  # Beam size for translation
 
 [tts]
-# Coqui TTS settings (Updated to match successful test implementation)
+# Coqui TTS settings (Optimized for performance and stability - using fast_pitch like PoC)
 provider = "coqui"  # TTS provider: coqui
-model_path = "tts_models/en/ljspeech/fast_pitch"  # Path to Coqui TTS model
-sample_rate = 22050  # TTS output sample rate (matches test implementation)
+model_path = "tts_models/en/ljspeech/fast_pitch"  # Path to Coqui TTS model (fast_pitch for better performance)
+sample_rate = 22050  # TTS output sample rate (native TTS rate to avoid resampling)
 channels = 1  # TTS output channels (mono)
-voice_speed = 1.0  # Voice speed multiplier
-voice_pitch = 1.0  # Voice pitch multiplier
+voice_speed = 1.0  # Voice speed multiplier (default for better performance)
+voice_pitch = 1.0  # Voice pitch multiplier (default for better performance)
 enable_gpu = false  # Enable GPU acceleration (requires CUDA)
 
 [processing]
 # Audio processing settings
-chunk_duration_ms = 300   # Duration of audio chunks to process (reduced for better responsiveness)
-silence_threshold = 0.015  # Threshold for silence detection (slightly higher to reduce false triggers)
-noise_reduction = false   # Disable noise reduction for better performance
-echo_cancellation = false # Disable echo cancellation for better performance
+chunk_duration_ms = 400  # Duration of audio chunks to process (increased for better stability)
+silence_threshold = 0.03  # Threshold for silence detection (adjusted for better speech detection)
+noise_reduction = false  # Enable noise reduction (disabled for better performance)
+echo_cancellation = false  # Enable echo cancellation (disabled for better performance)
 
 [logging]
 # Logging configuration

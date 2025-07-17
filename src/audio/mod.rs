@@ -2,7 +2,7 @@ pub mod capture;
 pub mod playback;
 pub mod processing;
 
-use crate::config::AudioConfig;
+use crate::config::{AudioConfig, ProcessingConfig};
 use crate::error::Result;
 use crate::translation::Translator;
 use tracing::{info, error, debug};
@@ -22,13 +22,18 @@ pub struct AudioManager {
 }
 
 impl AudioManager {
-    pub fn new(config: AudioConfig) -> Result<Self> {
-        info!("Initializing AudioManager with config: {:?}", config);
+    pub fn new(audio_config: AudioConfig, processing_config: ProcessingConfig) -> Result<Self> {
+        info!("Initializing AudioManager with audio config: {:?}", audio_config);
+        info!("Processing config: {:?}", processing_config);
         
-        let processor = AudioProcessor::new(config.clone())?;
+        let mut processor = AudioProcessor::new(audio_config.clone())?;
+        processor.update_processing_config(
+            processing_config.silence_threshold,
+            processing_config.chunk_duration_ms
+        );
         
         Ok(Self {
-            config,
+            config: audio_config,
             capture: None,
             playback: None,
             processor,
@@ -89,7 +94,9 @@ impl AudioManager {
                         Ok(translated_audio) => {
                             if let Some(translated_audio) = translated_audio {
                                 debug!("Sending translated audio to playback");
-                                playback.write_audio_chunk(translated_audio).await?;
+                                if let Err(e) = playback.write_audio_chunk(translated_audio).await {
+                                    error!("Failed to write audio chunk: {}", e);
+                                }
                             }
                         }
                         Err(e) => {
@@ -99,9 +106,13 @@ impl AudioManager {
                 }
                 Err(e) => {
                     error!("Error reading audio chunk: {}", e);
-                    break;
+                    // Add a small delay to prevent tight loop on errors
+                    tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
                 }
             }
+            
+            // Add a small delay to prevent excessive CPU usage
+            tokio::time::sleep(tokio::time::Duration::from_millis(5)).await;
         }
         
         Ok(())

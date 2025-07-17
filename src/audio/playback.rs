@@ -25,7 +25,7 @@ impl AudioPlayback {
         let host = cpal::default_host();
         let device = Self::find_output_device(&host, &config)?;
         
-        let (sender, receiver) = mpsc::channel(100);
+        let (sender, receiver) = mpsc::channel(500); // Increased buffer size for better stability
         
         Ok(Self {
             config,
@@ -171,33 +171,53 @@ impl AudioPlayback {
     ) {
         let mut buffer = audio_buffer.lock().unwrap();
         
-        // Fill the output buffer with available audio data
-        // Handle multi-channel output by duplicating mono samples
+        // Process audio in chunks for better performance
         let samples_per_frame = channels;
+        let available_samples = buffer.len();
+        let requested_samples = data.len() / samples_per_frame;
         
-        for frame in data.chunks_mut(samples_per_frame) {
-            if let Some(&audio_sample) = buffer.get(0) {
+        if available_samples >= requested_samples {
+            // We have enough samples, copy them efficiently
+            for (i, frame) in data.chunks_mut(samples_per_frame).enumerate() {
+                let audio_sample = buffer[i];
                 // Duplicate mono sample to all channels
                 for sample in frame.iter_mut() {
                     *sample = audio_sample;
                 }
-                // Remove the sample we just used
-                buffer.drain(0..1);
-            } else {
-                // Silence if no more data
-                for sample in frame.iter_mut() {
-                    *sample = 0.0;
+            }
+            // Remove the samples we just used
+            buffer.drain(0..requested_samples);
+        } else if available_samples > 0 {
+            // We have some samples but not enough
+            for (i, frame) in data.chunks_mut(samples_per_frame).enumerate() {
+                if i < available_samples {
+                    let audio_sample = buffer[i];
+                    for sample in frame.iter_mut() {
+                        *sample = audio_sample;
+                    }
+                } else {
+                    // Fill remaining frames with silence
+                    for sample in frame.iter_mut() {
+                        *sample = 0.0;
+                    }
                 }
+            }
+            // Remove all used samples
+            buffer.clear();
+        } else {
+            // No samples available, fill with silence
+            for sample in data.iter_mut() {
+                *sample = 0.0;
             }
         }
         
-        // Request more audio data if buffer is getting low
-        if buffer.len() < 1024 {
+        // Request more audio data if buffer is getting low (reduced frequency)
+        if buffer.len() < 1024 { // Reduced threshold
             // Only log occasionally to avoid spam
             static mut COUNTER: u32 = 0;
             unsafe {
                 COUNTER += 1;
-                if COUNTER % 100 == 0 {
+                if COUNTER % 500 == 0 { // Further reduced logging frequency
                     debug!("Audio buffer running low ({} samples), requesting more data", buffer.len());
                 }
             }

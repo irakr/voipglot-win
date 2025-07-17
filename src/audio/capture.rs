@@ -25,7 +25,7 @@ impl AudioCapture {
         let host = cpal::default_host();
         let device = Self::find_input_device(&host, &config)?;
         
-        let (sender, receiver) = mpsc::channel(100);
+        let (sender, receiver) = mpsc::channel(200); // Increased buffer size to reduce overflow
         
         Ok(Self {
             config,
@@ -110,10 +110,25 @@ impl AudioCapture {
         
         info!("Supported input config: {:?}", supported_configs);
         
-        // Use the device's supported configuration and handle conversion in the callback
+        // Try to use the configured values, but fall back to device capabilities if needed
+        let channels = if supported_configs.channels() >= self.config.channels {
+            self.config.channels
+        } else {
+            warn!("Device doesn't support {} channels, using {}", self.config.channels, supported_configs.channels());
+            supported_configs.channels()
+        };
+        
+        let sample_rate = if supported_configs.sample_rate().0 >= self.config.sample_rate {
+            cpal::SampleRate(self.config.sample_rate)
+        } else {
+            warn!("Device doesn't support {} Hz sample rate, using {} Hz", 
+                  self.config.sample_rate, supported_configs.sample_rate().0);
+            supported_configs.sample_rate()
+        };
+        
         let config = cpal::StreamConfig {
-            channels: supported_configs.channels(),
-            sample_rate: supported_configs.sample_rate(),
+            channels,
+            sample_rate,
             buffer_size: cpal::BufferSize::Fixed(self.config.buffer_size as u32),
         };
         
@@ -145,35 +160,24 @@ impl AudioCapture {
         let mut buffer = audio_buffer.lock().unwrap();
         buffer.extend_from_slice(&mono_samples);
         
-        // Calculate chunk size based on target sample rate (16kHz for VOSK)
-        // We want 1 second of audio at 16kHz, so we need to accumulate enough samples
-        let target_sample_rate: u32 = 16000;
-        let samples_per_second = target_sample_rate as usize;
-        let chunk_size = samples_per_second;
+        // Calculate chunk size based on configured sample rate and chunk duration
+        // Use 300ms chunks for better stability (increased from 200ms)
+        let chunk_duration_ms = 300;
+        let samples_per_chunk = (device_sample_rate as usize * chunk_duration_ms) / 1000;
         
-        if buffer.len() >= chunk_size {
-            let chunk: Vec<f32> = buffer.drain(..chunk_size).collect();
-            
-            // Simple sample rate conversion: downsample if needed
-            let converted_chunk = if device_sample_rate != target_sample_rate {
-                let ratio = device_sample_rate as f32 / target_sample_rate as f32;
-                let new_length = (chunk.len() as f32 / ratio) as usize;
-                let mut converted = Vec::with_capacity(new_length);
-                
-                for i in 0..new_length {
-                    let src_index = (i as f32 * ratio) as usize;
-                    if src_index < chunk.len() {
-                        converted.push(chunk[src_index]);
-                    }
-                }
-                converted
-            } else {
-                chunk
-            };
+        if buffer.len() >= samples_per_chunk {
+            let chunk: Vec<f32> = buffer.drain(..samples_per_chunk).collect();
             
             // Try to send the chunk, but don't block if the receiver is slow
-            if let Err(e) = sender.try_send(converted_chunk) {
-                debug!("Failed to send audio chunk: {}", e);
+            if let Err(e) = sender.try_send(chunk) {
+                // Only log occasionally to avoid spam
+                static mut COUNTER: u32 = 0;
+                unsafe {
+                    COUNTER += 1;
+                    if COUNTER % 100 == 0 { // Reduced logging frequency
+                        debug!("Failed to send audio chunk: {}", e);
+                    }
+                }
             }
         }
     }
