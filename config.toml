@@ -18,7 +18,9 @@ echo_cancellation = true
 [stt]
 # Speech-to-Text configuration (VOSK)
 provider = "vosk"
-model_path = "models/vosk-model-small-en-us-0.15"
+# Models must be downloaded from https://alphacephei.com/vosk/models
+# and then extracted to voipglot-win\models directory.
+model_path = "models/vosk-model-small-en-in-0.4"
 sample_rate = 16000.0
 enable_partial_results = true
 
