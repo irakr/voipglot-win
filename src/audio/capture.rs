@@ -1,242 +1,160 @@
+use anyhow::Result;
 use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
-    Sample, SampleFormat, Stream,
+    SampleFormat,
 };
-use crate::config::AudioConfig;
-use crate::error::{Result, VoipGlotError};
-use tracing::{info, error, debug, warn};
-use std::sync::{Arc, Mutex};
+use dasp::Sample;
 use tokio::sync::mpsc;
+use tracing::{error, info};
+
+use crate::config::AppConfig;
 
 pub struct AudioCapture {
-    config: AudioConfig,
-    host: cpal::Host,
-    device: Option<cpal::Device>,
-    stream: Option<Stream>,
-    audio_buffer: Arc<Mutex<Vec<f32>>>,
-    sender: Option<mpsc::Sender<Vec<f32>>>,
-    receiver: Option<mpsc::Receiver<Vec<f32>>>,
+    config: AppConfig,
+    audio_tx: Option<mpsc::UnboundedSender<Vec<i16>>>,
+    stream: Option<cpal::Stream>,
 }
 
 impl AudioCapture {
-    pub fn new(config: AudioConfig) -> Result<Self> {
-        info!("Initializing AudioCapture");
+    pub fn new(config: AppConfig) -> Self {
+        info!("Initializing Audio Capture");
         
-        let host = cpal::default_host();
-        let device = Self::find_input_device(&host, &config)?;
-        
-        let (sender, receiver) = mpsc::channel(200); // Increased buffer size to reduce overflow
-        
-        Ok(Self {
+        Self {
             config,
-            host,
-            device,
+            audio_tx: None,
             stream: None,
-            audio_buffer: Arc::new(Mutex::new(Vec::new())),
-            sender: Some(sender),
-            receiver: Some(receiver),
-        })
+        }
     }
-
-    fn find_input_device(host: &cpal::Host, config: &AudioConfig) -> Result<Option<cpal::Device>> {
-        let devices = host.input_devices()
-            .map_err(|e| VoipGlotError::Audio(format!("Failed to enumerate input devices: {}", e)))?;
+    
+    pub fn start_capture(&mut self, audio_tx: mpsc::UnboundedSender<Vec<i16>>) -> Result<()> {
+        info!("Starting audio capture");
         
-        info!("Available input devices:");
-        let mut device_list = Vec::new();
-        for device in devices {
-            if let Ok(name) = device.name() {
-                device_list.push((device, name.clone()));
-                info!("  - {}", name);
+        // Get default input device
+        let host = cpal::default_host();
+        let device = host
+            .default_input_device()
+            .ok_or_else(|| anyhow::anyhow!("No input device found"))?;
+        
+        info!("Using input device: {}", device.name().unwrap_or_default());
+        
+        // Get device config
+        let config = device
+            .default_input_config()
+            .map_err(|e| anyhow::anyhow!("Failed to get input config: {}", e))?;
+        
+        let channels = config.channels();
+        let sample_rate = config.sample_rate().0;
+        
+        info!("Audio config: {}Hz, {} channels, {:?} format", 
+              sample_rate, channels, config.sample_format());
+        
+        self.audio_tx = Some(audio_tx);
+        
+        // Build audio stream
+        let err_fn = |err| {
+            error!("Audio stream error: {}", err);
+        };
+        
+        let audio_tx = self.audio_tx.as_ref().unwrap().clone();
+        let stream = match config.sample_format() {
+            SampleFormat::I8 => device.build_input_stream(
+                &config.into(),
+                move |data: &[i8], _| {
+                    let data: Vec<i16> = data.iter().map(|v| v.to_sample()).collect();
+                    let data = if channels != 1 {
+                        Self::stereo_to_mono(&data)
+                    } else {
+                        data
+                    };
+                    
+                    if let Err(e) = audio_tx.send(data) {
+                        error!("Failed to send audio data: {}", e);
+                    }
+                },
+                err_fn,
+                None,
+            ),
+            SampleFormat::I16 => device.build_input_stream(
+                &config.into(),
+                move |data: &[i16], _| {
+                    let data = if channels != 1 {
+                        Self::stereo_to_mono(data)
+                    } else {
+                        data.to_vec()
+                    };
+                    
+                    if let Err(e) = audio_tx.send(data) {
+                        error!("Failed to send audio data: {}", e);
+                    }
+                },
+                err_fn,
+                None,
+            ),
+            SampleFormat::I32 => device.build_input_stream(
+                &config.into(),
+                move |data: &[i32], _| {
+                    let data: Vec<i16> = data.iter().map(|v| v.to_sample()).collect();
+                    let data = if channels != 1 {
+                        Self::stereo_to_mono(&data)
+                    } else {
+                        data
+                    };
+                    
+                    if let Err(e) = audio_tx.send(data) {
+                        error!("Failed to send audio data: {}", e);
+                    }
+                },
+                err_fn,
+                None,
+            ),
+            SampleFormat::F32 => device.build_input_stream(
+                &config.into(),
+                move |data: &[f32], _| {
+                    let data: Vec<i16> = data.iter().map(|v| v.to_sample()).collect();
+                    let data = if channels != 1 {
+                        Self::stereo_to_mono(&data)
+                    } else {
+                        data
+                    };
+                    
+                    if let Err(e) = audio_tx.send(data) {
+                        error!("Failed to send audio data: {}", e);
+                    }
+                },
+                err_fn,
+                None,
+            ),
+            sample_format => {
+                return Err(anyhow::anyhow!("Unsupported sample format: {:?}", sample_format));
             }
         }
+        .map_err(|e| anyhow::anyhow!("Failed to build input stream: {}", e))?;
         
-        // If a specific device is configured, try to find it
-        if let Some(device_name) = &config.input_device {
-            for (device, name) in &device_list {
-                if name.contains(device_name) {
-                    info!("Found configured input device: {}", name);
-                    return Ok(Some(device.clone()));
-                }
-            }
-            warn!("Configured input device '{}' not found", device_name);
-        }
+        // Start the stream
+        stream.play().map_err(|e| anyhow::anyhow!("Failed to play stream: {}", e))?;
         
-        // Use default input device
-        let default_device = host.default_input_device();
-        if let Some(device) = &default_device {
-            if let Ok(name) = device.name() {
-                info!("Using default input device: {}", name);
-            }
-        }
-        
-        Ok(default_device)
-    }
-
-    pub fn start(&mut self) -> Result<()> {
-        let device = self.device.as_ref()
-            .ok_or_else(|| VoipGlotError::DeviceNotFound("No input device available".to_string()))?;
-        
-        info!("Starting audio capture from device");
-        
-        let config = self.build_stream_config(device)?;
-        let audio_buffer = Arc::clone(&self.audio_buffer);
-        let sender = self.sender.as_ref()
-            .ok_or_else(|| VoipGlotError::Audio("Sender not available".to_string()))?;
-        
-        let device_sample_rate = config.sample_rate.0;
-        let sender_clone = sender.clone();
-        let stream = device.build_input_stream(
-            &config,
-            move |data: &[f32], _: &cpal::InputCallbackInfo| {
-                Self::audio_callback(data, &audio_buffer, &sender_clone, device_sample_rate);
-            },
-            |err| {
-                error!("Audio capture error: {}", err);
-            },
-            None,
-        )?;
-        
-        stream.play()?;
         self.stream = Some(stream);
         
         info!("Audio capture started successfully");
         Ok(())
     }
-
-    fn build_stream_config(&self, device: &cpal::Device) -> Result<cpal::StreamConfig> {
-        let supported_configs = device.default_input_config()
-            .map_err(|e| VoipGlotError::Audio(format!("Failed to get default input config: {}", e)))?;
-        
-        info!("Supported input config: {:?}", supported_configs);
-        
-        // Try to use the configured values, but fall back to device capabilities if needed
-        let channels = if supported_configs.channels() >= self.config.channels {
-            self.config.channels
-        } else {
-            warn!("Device doesn't support {} channels, using {}", self.config.channels, supported_configs.channels());
-            supported_configs.channels()
-        };
-        
-        let sample_rate = if supported_configs.sample_rate().0 >= self.config.sample_rate {
-            cpal::SampleRate(self.config.sample_rate)
-        } else {
-            warn!("Device doesn't support {} Hz sample rate, using {} Hz", 
-                  self.config.sample_rate, supported_configs.sample_rate().0);
-            supported_configs.sample_rate()
-        };
-        
-        let config = cpal::StreamConfig {
-            channels,
-            sample_rate,
-            buffer_size: cpal::BufferSize::Fixed(self.config.buffer_size as u32),
-        };
-        
-        info!("Using stream config: {:?}", config);
-        Ok(config)
-    }
-
-    fn audio_callback(
-        data: &[f32],
-        audio_buffer: &Arc<Mutex<Vec<f32>>>,
-        sender: &mpsc::Sender<Vec<f32>>,
-        device_sample_rate: u32,
-    ) {
-        // Convert stereo to mono if needed
-        let mono_samples: Vec<f32> = if data.len() > 1 && data.len() % 2 == 0 {
-            // Assume stereo input, convert to mono
-            data.chunks(2).map(|chunk| {
-                if chunk.len() == 2 {
-                    (chunk[0] + chunk[1]) / 2.0
-                } else {
-                    chunk[0]
-                }
-            }).collect()
-        } else {
-            data.to_vec()
-        };
-        
-        // Copy audio data to our buffer
-        let mut buffer = audio_buffer.lock().unwrap();
-        buffer.extend_from_slice(&mono_samples);
-        
-        // Calculate chunk size based on configured sample rate and chunk duration
-        // Use 300ms chunks for better stability (increased from 200ms)
-        let chunk_duration_ms = 300;
-        let samples_per_chunk = (device_sample_rate as usize * chunk_duration_ms) / 1000;
-        
-        if buffer.len() >= samples_per_chunk {
-            let chunk: Vec<f32> = buffer.drain(..samples_per_chunk).collect();
-            
-            // Try to send the chunk, but don't block if the receiver is slow
-            if let Err(e) = sender.try_send(chunk) {
-                // Only log occasionally to avoid spam
-                static mut COUNTER: u32 = 0;
-                unsafe {
-                    COUNTER += 1;
-                    if COUNTER % 100 == 0 { // Reduced logging frequency
-                        debug!("Failed to send audio chunk: {}", e);
-                    }
-                }
-            }
-        }
-    }
-
-    pub async fn read_audio_chunk(&mut self) -> Result<Vec<f32>> {
-        let receiver = self.receiver.as_mut()
-            .ok_or_else(|| VoipGlotError::Audio("Receiver not available".to_string()))?;
-        
-        match receiver.recv().await {
-            Some(chunk) => {
-                debug!("Received audio chunk of {} samples", chunk.len());
-                Ok(chunk)
-            }
-            None => {
-                Err(VoipGlotError::Audio("Audio capture channel closed".to_string()))
-            }
-        }
-    }
-
-    pub fn stop(&mut self) -> Result<()> {
+    
+    pub fn stop_capture(&mut self) {
         info!("Stopping audio capture");
         
-        if let Some(stream) = &self.stream {
-            stream.pause()?;
-        }
-        
         self.stream = None;
+        self.audio_tx = None;
+        
         info!("Audio capture stopped");
-        Ok(())
     }
-
-    pub fn list_devices(&self) -> Result<Vec<String>> {
-        let devices = self.host.input_devices()
-            .map_err(|e| VoipGlotError::Audio(format!("Failed to enumerate devices: {}", e)))?;
-        
-        let mut device_names = Vec::new();
-        for device in devices {
-            if let Ok(name) = device.name() {
-                device_names.push(name);
-            }
-        }
-        
-        Ok(device_names)
+    
+    fn stereo_to_mono(input_data: &[i16]) -> Vec<i16> {
+        let mut result = Vec::with_capacity(input_data.len() / 2);
+        result.extend(
+            input_data
+                .chunks_exact(2)
+                .map(|chunk| chunk[0] / 2 + chunk[1] / 2),
+        );
+        result
     }
-
-    pub fn find_vb_cable_device(&self) -> Result<Option<cpal::Device>> {
-        let devices = self.host.input_devices()
-            .map_err(|e| VoipGlotError::Audio(format!("Failed to enumerate devices: {}", e)))?;
-        
-        for device in devices {
-            if let Ok(name) = device.name() {
-                if name.contains("CABLE Input") || name.contains("VB-Audio") {
-                    info!("Found VB Cable device: {}", name);
-                    return Ok(Some(device));
-                }
-            }
-        }
-        
-        warn!("VB Cable device not found");
-        Ok(None)
-    }
-} 
+}

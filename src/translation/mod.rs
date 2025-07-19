@@ -2,218 +2,118 @@ pub mod stt;
 pub mod translator_api;
 pub mod tts;
 
-use crate::error::{Result, VoipGlotError};
-use crate::config::{SttConfig, TranslationConfig, TtsConfig};
-use tracing::{info, error, debug, warn};
+use anyhow::Result;
+use tokio::sync::mpsc;
+use tracing::info;
 
-pub use stt::SpeechToText;
-pub use translator_api::TranslationApi;
-pub use tts::TextToSpeech;
+use crate::config::AppConfig;
 
-pub struct Translator {
-    source_language: String,
-    target_language: String,
-    stt: SpeechToText,
-    translator: TranslationApi,
-    tts: TextToSpeech,
+use self::stt::STTProcessor;
+use self::translator_api::TranslatorProcessor;
+use self::tts::TTSProcessor;
+
+pub struct TranslationPipeline {
+    stt: STTProcessor,
+    translator: TranslatorProcessor,
+    tts: TTSProcessor,
+    running: bool,
 }
 
-impl Translator {
-    pub fn new(stt_config: SttConfig, translation_config: TranslationConfig, tts_config: TtsConfig) -> Result<Self> {
-        info!("Initializing Translator: {} -> {}", translation_config.source_language, translation_config.target_language);
+impl TranslationPipeline {
+    pub fn new(config: AppConfig) -> Result<Self> {
+        info!("Initializing translation pipeline");
         
-        let stt = SpeechToText::new(stt_config)?;
-        let translator = TranslationApi::new(translation_config.clone())?;
-        let tts = TextToSpeech::new(tts_config)?;
+        // Create channels for inter-module communication
+        let (stt_text_tx, stt_text_rx) = mpsc::unbounded_channel::<String>();
+        let (translator_text_tx, translator_text_rx) = mpsc::unbounded_channel::<String>();
+        let (tts_audio_tx, tts_audio_rx) = mpsc::unbounded_channel::<Vec<f32>>();
         
-        // Inform user about TTS language support
-        if translation_config.target_language != "en" {
-            info!("Note: TTS currently supports English only. Translation will work, but speech synthesis will be in English.");
-        }
+        // Initialize STT processor
+        let stt = STTProcessor::new(config.clone(), stt_text_tx)?;
+        
+        // Initialize translator processor
+        let translator = TranslatorProcessor::new(config.clone(), translator_text_tx)?;
+        
+        // Initialize TTS processor
+        let tts = TTSProcessor::new(config.clone(), tts_audio_tx)?;
+        
+        // Start pipeline processing tasks
+        Self::start_pipeline_tasks(stt_text_rx, translator_text_rx, tts_audio_rx, config.clone());
         
         Ok(Self {
-            source_language: translation_config.source_language.clone(),
-            target_language: translation_config.target_language.clone(),
             stt,
             translator,
             tts,
+            running: false,
         })
     }
-
-    pub async fn speech_to_text(&mut self, audio_data: Vec<f32>) -> Result<String> {
-        debug!("Converting speech to text");
-        self.stt.transcribe(audio_data).await
-    }
-
-    pub async fn translate_text(&self, text: &str) -> Result<String> {
-        if text.trim().is_empty() {
-            return Ok(String::new());
-        }
-        
-        // Skip translation if source and target languages are the same
-        if self.source_language == self.target_language {
-            debug!("Source and target languages are the same ({}), skipping translation", self.source_language);
-            return Ok(text.to_string());
-        }
-        
-        debug!("Translating text: '{}'", text);
-        self.translator.translate(text, &self.source_language, &self.target_language).await
-    }
-
-    pub async fn text_to_speech(&mut self, text: &str) -> Result<Vec<f32>> {
-        if text.trim().is_empty() {
-            return Ok(Vec::new());
-        }
-        
-        debug!("Converting text to speech: '{}'", text);
-        self.tts.synthesize(text).await
-    }
-
-    pub async fn process_audio_pipeline(&mut self, audio_data: Vec<f32>) -> Result<Option<Vec<f32>>> {
-        debug!("Processing audio pipeline with {} samples", audio_data.len());
-        
-        // Step 1: Speech to Text
-        let transcribed_text = self.speech_to_text(audio_data).await?;
-        if transcribed_text.is_empty() {
-            debug!("No speech detected, skipping translation");
-            return Ok(None);
-        }
-        
-        info!("Transcribed: '{}'", transcribed_text);
-        
-        // Reset STT recognizer to prevent text accumulation in subsequent processing
-        // This ensures each audio chunk is processed independently
-        // Only reset if we got actual transcribed text (not empty)
-        if !transcribed_text.trim().is_empty() {
-            if let Err(e) = self.stt.reset() {
-                warn!("Failed to reset STT recognizer: {}", e);
-            } else {
-                debug!("STT recognizer reset successfully to prevent text accumulation");
+    
+    fn start_pipeline_tasks(
+        mut stt_text_rx: mpsc::UnboundedReceiver<String>,
+        mut translator_text_rx: mpsc::UnboundedReceiver<String>,
+        mut tts_audio_rx: mpsc::UnboundedReceiver<Vec<f32>>,
+        _config: AppConfig,
+    ) {
+        // STT -> Translator task
+        tokio::spawn(async move {
+            while let Some(transcribed_text) = stt_text_rx.recv().await {
+                info!("STT -> Translator: \"{}\"", transcribed_text);
+                // For now, just print the transcribed text
+                println!("Transcribed: \"{}\"", transcribed_text);
+                
+                // TODO: Send to translator when ready
+                // translator.process_translation_pipeline(transcribed_text).await;
             }
-        }
+        });
         
-        // Step 2: Translation (skip if same language)
-        let translated_text = self.translate_text(&transcribed_text).await?;
-        if translated_text.is_empty() {
-            debug!("Translation failed or produced empty result");
-            return Ok(None);
-        }
-        
-        info!("Translated: '{}' -> '{}'", transcribed_text, translated_text);
-        
-        // Step 3: Set TTS language only if needed (optimized)
-        if self.source_language != self.target_language {
-            debug!("Setting TTS language to target language: {}", self.target_language);
-            if let Err(e) = self.tts.set_language(self.target_language.clone()) {
-                warn!("Failed to set TTS language to {}: {}, using current language", self.target_language, e);
+        // Translator -> TTS task (placeholder for now)
+        tokio::spawn(async move {
+            while let Some(translated_text) = translator_text_rx.recv().await {
+                info!("Translator -> TTS: \"{}\"", translated_text);
+                // TODO: Send to TTS when ready
+                // tts.process_tts_pipeline(translated_text).await;
             }
+        });
+        
+        // TTS -> Audio Output task (placeholder for now)
+        tokio::spawn(async move {
+            while let Some(audio_data) = tts_audio_rx.recv().await {
+                info!("TTS -> Audio Output: {} samples", audio_data.len());
+                // TODO: Send to audio playback when ready
+            }
+        });
+    }
+    
+    pub fn start(&mut self) -> Result<()> {
+        if self.running {
+            return Ok(());
         }
         
-        // Step 4: Text to Speech (with timeout to prevent blocking)
-        let synthesized_audio = tokio::time::timeout(
-            std::time::Duration::from_secs(10), // 10 second timeout
-            self.text_to_speech(&translated_text)
-        ).await.map_err(|_| VoipGlotError::SynthesisError("TTS synthesis timeout".to_string()))??;
+        info!("Starting translation pipeline");
         
-        if synthesized_audio.is_empty() {
-            debug!("TTS failed or produced empty audio");
-            return Ok(None);
-        }
+        // Start STT audio capture
+        self.stt.start_audio_capture()?;
         
-        // Note: Currently only English TTS is fully supported
-        let tts_language = if self.target_language == "en" { "English" } else { "English (translation will be in English)" };
-        info!("Synthesized {} samples of audio in {}", synthesized_audio.len(), tts_language);
-        Ok(Some(synthesized_audio))
-    }
-
-    pub fn set_source_language(&mut self, lang: String) {
-        self.source_language = lang.clone();
-        if let Err(e) = self.stt.set_language(lang) {
-            error!("Failed to set STT language: {}", e);
-        }
-    }
-
-    pub fn set_target_language(&mut self, lang: String) {
-        self.target_language = lang.clone();
-        if let Err(e) = self.tts.set_language(lang) {
-            error!("Failed to set TTS language: {}", e);
-        }
-    }
-
-    pub fn get_supported_languages(&self) -> SupportedLanguages {
-        SupportedLanguages {
-            stt: self.stt.get_supported_languages(),
-            translation: self.translator.get_supported_languages(),
-            tts: self.tts.get_supported_languages(),
-        }
-    }
-
-    pub fn get_source_language(&self) -> &str {
-        &self.source_language
-    }
-
-    pub fn get_target_language(&self) -> &str {
-        &self.target_language
-    }
-
-    pub fn reset_stt(&mut self) -> Result<()> {
-        debug!("Resetting STT recognizer");
-        self.stt.reset()
-    }
-
-    pub fn reset_tts(&mut self) -> Result<()> {
-        debug!("Resetting TTS synthesizer");
-        // For now, TTS doesn't need reset, but we keep the method for consistency
+        self.running = true;
+        info!("Translation pipeline started successfully");
+        
         Ok(())
     }
-
-    pub fn force_reset_stt(&mut self) -> Result<()> {
-        debug!("Force resetting STT recognizer");
-        self.stt.reset()
+    
+    pub fn stop(&mut self) {
+        if !self.running {
+            return;
+        }
+        
+        info!("Stopping translation pipeline");
+        
+        self.stt.stop();
+        self.running = false;
+        
+        info!("Translation pipeline stopped");
     }
-
-    pub fn clear_stt_history(&mut self) {
-        debug!("Clearing STT text history");
-        self.stt.clear_text_history();
+    
+    pub fn is_running(&self) -> bool {
+        self.running
     }
 }
-
-#[derive(Debug, Clone)]
-pub struct SupportedLanguages {
-    pub stt: Vec<String>,
-    pub translation: Vec<String>,
-    pub tts: Vec<String>,
-}
-
-// Language code utilities
-pub mod language_codes {
-    use std::collections::HashMap;
-    use lazy_static::lazy_static;
-
-    lazy_static! {
-        static ref LANGUAGE_CODES: HashMap<&'static str, &'static str> = {
-            let mut m = HashMap::new();
-            m.insert("english", "en");
-            m.insert("spanish", "es");
-            m.insert("french", "fr");
-            m.insert("german", "de");
-            m.insert("italian", "it");
-            m.insert("portuguese", "pt");
-            m.insert("russian", "ru");
-            m.insert("japanese", "ja");
-            m.insert("korean", "ko");
-            m.insert("chinese", "zh");
-            m.insert("arabic", "ar");
-            m.insert("hindi", "hi");
-            m
-        };
-    }
-
-    pub fn get_language_code(language: &str) -> Option<&str> {
-        LANGUAGE_CODES.get(language.to_lowercase().as_str()).copied()
-    }
-
-    pub fn normalize_language_code(code: &str) -> String {
-        code.to_lowercase()
-    }
-} 

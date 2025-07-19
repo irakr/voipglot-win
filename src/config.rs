@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize, Deserializer};
-use std::collections::HashMap;
+
 use crate::error::{Result, VoipGlotError};
 
 // Custom deserialization function to convert empty strings to None

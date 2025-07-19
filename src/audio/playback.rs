@@ -1,287 +1,84 @@
+use anyhow::Result;
 use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
-    Sample, SampleFormat, Stream,
 };
-use crate::config::AudioConfig;
-use crate::error::{Result, VoipGlotError};
-use tracing::{info, error, debug, warn};
-use std::sync::{Arc, Mutex};
-use tokio::sync::mpsc;
+use tracing::{debug, error, info};
+
+use crate::config::AppConfig;
 
 pub struct AudioPlayback {
-    config: AudioConfig,
-    host: cpal::Host,
-    device: Option<cpal::Device>,
-    stream: Option<Stream>,
-    audio_buffer: Arc<Mutex<Vec<f32>>>,
-    sender: Option<mpsc::Sender<Vec<f32>>>,
-    receiver: Option<mpsc::Receiver<Vec<f32>>>,
+    config: AppConfig,
+    stream: Option<cpal::Stream>,
 }
 
 impl AudioPlayback {
-    pub fn new(config: AudioConfig) -> Result<Self> {
-        info!("Initializing AudioPlayback");
+    pub fn new(config: AppConfig) -> Self {
+        info!("Initializing Audio Playback");
         
-        let host = cpal::default_host();
-        let device = Self::find_output_device(&host, &config)?;
-        
-        let (sender, receiver) = mpsc::channel(500); // Increased buffer size for better stability
-        
-        Ok(Self {
+        Self {
             config,
-            host,
-            device,
             stream: None,
-            audio_buffer: Arc::new(Mutex::new(Vec::new())),
-            sender: Some(sender),
-            receiver: Some(receiver),
-        })
+        }
     }
-
-    fn find_output_device(host: &cpal::Host, config: &AudioConfig) -> Result<Option<cpal::Device>> {
-        let devices = host.output_devices()
-            .map_err(|e| VoipGlotError::Audio(format!("Failed to enumerate output devices: {}", e)))?;
+    
+    pub fn start_playback(&mut self) -> Result<()> {
+        info!("Starting audio playback");
         
-        info!("Available output devices:");
-        let mut device_list = Vec::new();
-        for device in devices {
-            if let Ok(name) = device.name() {
-                device_list.push((device, name.clone()));
-                info!("  - {}", name);
-            }
-        }
+        // Get default output device
+        let host = cpal::default_host();
+        let device = host
+            .default_output_device()
+            .ok_or_else(|| anyhow::anyhow!("No output device found"))?;
         
-        // If a specific device is configured, try to find it
-        if let Some(device_name) = &config.output_device {
-            for (device, name) in &device_list {
-                if name.contains(device_name) {
-                    info!("Found configured output device: {}", name);
-                    return Ok(Some(device.clone()));
-                }
-            }
-            warn!("Configured output device '{}' not found", device_name);
-        }
+        info!("Using output device: {}", device.name().unwrap_or_default());
         
-        // If output_device is None (empty string in config), use system default
-        // Only use VB Cable as fallback if output_device was explicitly set but not found
-        if config.output_device.is_none() {
-            // Use default output device when no specific device is configured
-            let default_device = host.default_output_device();
-            if let Some(device) = &default_device {
-                if let Ok(name) = device.name() {
-                    info!("Using default output device: {}", name);
-                }
-            }
-            return Ok(default_device);
-        }
+        // Get device config
+        let config = device
+            .default_output_config()
+            .map_err(|e| anyhow::anyhow!("Failed to get output config: {}", e))?;
         
-        // Only try VB Cable as fallback if output_device was specified but not found
-        if !config.vb_cable_device.is_empty() {
-            for (device, name) in &device_list {
-                if name.contains(&config.vb_cable_device) {
-                    info!("Falling back to VB Cable device: {}", name);
-                    return Ok(Some(device.clone()));
-                }
-            }
-            warn!("Configured VB Cable device '{}' not found", config.vb_cable_device);
-        }
+        let sample_rate = config.sample_rate().0;
         
-        // Final fallback to default output device
-        let default_device = host.default_output_device();
-        if let Some(device) = &default_device {
-            if let Ok(name) = device.name() {
-                info!("Using default output device as final fallback: {}", name);
-            }
-        }
+        info!("Audio output config: {}Hz, {} channels, {:?} format", 
+              sample_rate, config.channels(), config.sample_format());
         
-        Ok(default_device)
-    }
-
-    pub fn start(&mut self) -> Result<()> {
-        let device = self.device.as_ref()
-            .ok_or_else(|| VoipGlotError::DeviceNotFound("No output device available".to_string()))?;
+        // Build output stream (placeholder for now)
+        let err_fn = |err| {
+            error!("Audio output stream error: {}", err);
+        };
         
-        info!("Starting audio playback to device");
-        
-        let config = self.build_stream_config(device)?;
-        let audio_buffer = Arc::clone(&self.audio_buffer);
-        let channels = config.channels as usize;
-        
-        // Start a background task to receive audio data and add it to the buffer
-        let receiver = self.receiver.take()
-            .ok_or_else(|| VoipGlotError::Audio("Receiver already taken".to_string()))?;
-        
-        let buffer_clone = Arc::clone(&audio_buffer);
-        tokio::spawn(async move {
-            Self::audio_receiver_task(receiver, buffer_clone).await;
-        });
-        
+        // For now, we'll create a simple output stream
+        // TODO: Implement actual audio output when TTS is ready
         let stream = device.build_output_stream(
-            &config,
-            move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
-                Self::audio_callback(data, &audio_buffer, channels);
+            &config.into(),
+            |_data: &mut [f32], _| {
+                // Placeholder: will be filled with actual TTS audio
             },
-            |err| {
-                error!("Audio playback error: {}", err);
-            },
+            err_fn,
             None,
-        )?;
+        )
+        .map_err(|e| anyhow::anyhow!("Failed to build output stream: {}", e))?;
         
-        stream.play()?;
+        // Start the stream
+        stream.play().map_err(|e| anyhow::anyhow!("Failed to play output stream: {}", e))?;
+        
         self.stream = Some(stream);
         
         info!("Audio playback started successfully");
         Ok(())
     }
-
-    async fn audio_receiver_task(
-        mut receiver: mpsc::Receiver<Vec<f32>>,
-        audio_buffer: Arc<Mutex<Vec<f32>>>,
-    ) {
-        while let Some(audio_data) = receiver.recv().await {
-            let mut buffer = audio_buffer.lock().unwrap();
-            let len = audio_data.len();
-            buffer.extend(audio_data);
-            debug!("Added {} samples to playback buffer", len);
-        }
-        debug!("Audio receiver task ended");
-    }
-
-    fn build_stream_config(&self, device: &cpal::Device) -> Result<cpal::StreamConfig> {
-        let supported_configs = device.default_output_config()
-            .map_err(|e| VoipGlotError::Audio(format!("Failed to get default output config: {}", e)))?;
-        
-        info!("Supported output config: {:?}", supported_configs);
-        
-        // Use the device's supported configuration and handle conversion in the callback
-        let config = cpal::StreamConfig {
-            channels: supported_configs.channels(),
-            sample_rate: supported_configs.sample_rate(),
-            buffer_size: cpal::BufferSize::Fixed(self.config.buffer_size as u32),
-        };
-        
-        info!("Using stream config: {:?}", config);
-        Ok(config)
-    }
-
-    fn audio_callback(
-        data: &mut [f32],
-        audio_buffer: &Arc<Mutex<Vec<f32>>>,
-        channels: usize,
-    ) {
-        let mut buffer = audio_buffer.lock().unwrap();
-        
-        // Process audio in chunks for better performance
-        let samples_per_frame = channels;
-        let available_samples = buffer.len();
-        let requested_samples = data.len() / samples_per_frame;
-        
-        if available_samples >= requested_samples {
-            // We have enough samples, copy them efficiently
-            for (i, frame) in data.chunks_mut(samples_per_frame).enumerate() {
-                let audio_sample = buffer[i];
-                // Duplicate mono sample to all channels
-                for sample in frame.iter_mut() {
-                    *sample = audio_sample;
-                }
-            }
-            // Remove the samples we just used
-            buffer.drain(0..requested_samples);
-        } else if available_samples > 0 {
-            // We have some samples but not enough
-            for (i, frame) in data.chunks_mut(samples_per_frame).enumerate() {
-                if i < available_samples {
-                    let audio_sample = buffer[i];
-                    for sample in frame.iter_mut() {
-                        *sample = audio_sample;
-                    }
-                } else {
-                    // Fill remaining frames with silence
-                    for sample in frame.iter_mut() {
-                        *sample = 0.0;
-                    }
-                }
-            }
-            // Remove all used samples
-            buffer.clear();
-        } else {
-            // No samples available, fill with silence
-            for sample in data.iter_mut() {
-                *sample = 0.0;
-            }
-        }
-        
-        // Request more audio data if buffer is getting low (reduced frequency)
-        if buffer.len() < 1024 { // Reduced threshold
-            // Only log occasionally to avoid spam
-            static mut COUNTER: u32 = 0;
-            unsafe {
-                COUNTER += 1;
-                if COUNTER % 500 == 0 { // Further reduced logging frequency
-                    debug!("Audio buffer running low ({} samples), requesting more data", buffer.len());
-                }
-            }
-        }
-    }
-
-    pub async fn write_audio_chunk(&mut self, audio_data: Vec<f32>) -> Result<()> {
-        let sender = self.sender.as_ref()
-            .ok_or_else(|| VoipGlotError::Audio("Sender not available".to_string()))?;
-        
-        sender.send(audio_data).await
-            .map_err(|e| VoipGlotError::Audio(format!("Failed to send audio chunk: {}", e)))?;
-        
-        debug!("Audio chunk queued for playback");
-        Ok(())
-    }
-
-    pub fn stop(&mut self) -> Result<()> {
+    
+    pub fn stop_playback(&mut self) {
         info!("Stopping audio playback");
         
-        if let Some(stream) = &self.stream {
-            stream.pause()?;
-        }
-        
         self.stream = None;
+        
         info!("Audio playback stopped");
+    }
+    
+    pub fn play_audio(&mut self, audio_data: &[f32]) -> Result<()> {
+        // TODO: Implement actual audio playback
+        debug!("Received audio data: {} samples", audio_data.len());
         Ok(())
     }
-
-    pub fn list_devices(&self) -> Result<Vec<String>> {
-        let devices = self.host.output_devices()
-            .map_err(|e| VoipGlotError::Audio(format!("Failed to enumerate devices: {}", e)))?;
-        
-        let mut device_names = Vec::new();
-        for device in devices {
-            if let Ok(name) = device.name() {
-                device_names.push(name);
-            }
-        }
-        
-        Ok(device_names)
-    }
-
-    pub fn find_vb_cable_device(&self) -> Result<Option<cpal::Device>> {
-        let devices = self.host.output_devices()
-            .map_err(|e| VoipGlotError::Audio(format!("Failed to enumerate devices: {}", e)))?;
-        
-        for device in devices {
-            if let Ok(name) = device.name() {
-                if name.contains("CABLE Input") || name.contains("VB-Audio") {
-                    info!("Found VB Cable device: {}", name);
-                    return Ok(Some(device));
-                }
-            }
-        }
-        
-        warn!("VB Cable device not found");
-        Ok(None)
-    }
-
-    pub fn set_volume(&mut self, volume: f32) -> Result<()> {
-        // Volume control would be implemented here
-        // This is a placeholder for future implementation
-        info!("Setting playback volume to {}", volume);
-        Ok(())
-    }
-} 
+}
