@@ -171,18 +171,14 @@ impl STTProcessor {
         
         match state {
             DecodingState::Running => {
-                let partial = recognizer.partial_result();
-                // Only show partial results if there's actual text
-                if !partial.partial.trim().is_empty() {
-                    info!("Partial STT result: \"{}\"", partial.partial);
-                }
+                // Skip partial results - don't print them
             }
             DecodingState::Finalized => {
                 // Result will always be multiple because we called set_max_alternatives
                 if let Some(results) = recognizer.result().multiple() {
                     if let Some(best) = results.alternatives.first() {
                         if !best.text.is_empty() {
-                            info!("STT Final result: \"{}\" (confidence: {:.2})", 
+                            info!("STT: \"{}\" (confidence: {:.2})", 
                                   best.text, best.confidence);
                             
                             // Send transcribed text to the next module

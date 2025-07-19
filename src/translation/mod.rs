@@ -57,7 +57,6 @@ impl TranslationPipeline {
         // STT -> Translator task
         tokio::spawn(async move {
             while let Some(transcribed_text) = stt_text_rx.recv().await {
-                info!("STT -> Translator: \"{}\"", transcribed_text);
                 // For now, just print the transcribed text
                 println!("Transcribed: \"{}\"", transcribed_text);
                 
