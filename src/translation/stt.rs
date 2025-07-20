@@ -3,10 +3,10 @@ use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
     SampleFormat,
 };
-use dasp::{Sample, sample::ToSample};
+use dasp::Sample;
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
-use tracing::{debug, error, info};
+use tracing::{error, info};
 use vosk::{DecodingState, Model, Recognizer};
 
 use crate::config::AppConfig;

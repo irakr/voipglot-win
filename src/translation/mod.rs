@@ -4,7 +4,7 @@ pub mod tts;
 
 use anyhow::Result;
 use tokio::sync::mpsc;
-use tracing::info;
+use tracing::{error, info};
 
 use crate::config::AppConfig;
 
@@ -38,7 +38,7 @@ impl TranslationPipeline {
         let tts = TTSProcessor::new(config.clone(), tts_audio_tx)?;
         
         // Start pipeline processing tasks
-        Self::start_pipeline_tasks(stt_text_rx, translator_text_rx, tts_audio_rx, config.clone());
+        Self::start_pipeline_tasks(stt_text_rx, translator_text_rx, tts_audio_rx, translator.clone());
         
         Ok(Self {
             stt,
@@ -52,20 +52,21 @@ impl TranslationPipeline {
         mut stt_text_rx: mpsc::UnboundedReceiver<String>,
         mut translator_text_rx: mpsc::UnboundedReceiver<String>,
         mut tts_audio_rx: mpsc::UnboundedReceiver<Vec<f32>>,
-        _config: AppConfig,
+        mut translator: TranslatorProcessor,
     ) {
         // STT -> Translator task
         tokio::spawn(async move {
             while let Some(transcribed_text) = stt_text_rx.recv().await {
-                // For now, just print the transcribed text
-                println!("Transcribed: \"{}\"", transcribed_text);
+                info!("STT -> Translator: \"{}\"", transcribed_text);
                 
-                // TODO: Send to translator when ready
-                // translator.process_translation_pipeline(transcribed_text).await;
+                // Send to translator
+                if let Err(e) = translator.process_translation_pipeline(transcribed_text) {
+                    error!("Failed to process translation: {}", e);
+                }
             }
         });
         
-        // Translator -> TTS task (placeholder for now)
+        // Translator -> TTS task
         tokio::spawn(async move {
             while let Some(translated_text) = translator_text_rx.recv().await {
                 info!("Translator -> TTS: \"{}\"", translated_text);

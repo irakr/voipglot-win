@@ -4,6 +4,7 @@ use tracing::{debug, error, info};
 
 use crate::config::AppConfig;
 
+#[derive(Clone)]
 pub struct TranslatorProcessor {
     text_tx: mpsc::UnboundedSender<String>,
     config: AppConfig,
@@ -25,6 +26,14 @@ impl TranslatorProcessor {
     pub fn translate_text(&mut self, source_text: &str) -> Result<String> {
         if source_text.trim().is_empty() {
             return Ok(String::new());
+        }
+        
+        // Check if source and target languages are the same
+        if self.config.translation.source_language == self.config.translation.target_language {
+            info!("Source and target languages match ({}), bypassing translation", 
+                  self.config.translation.source_language);
+            debug!("Bypassed text: \"{}\"", source_text);
+            return Ok(source_text.to_string());
         }
         
         debug!("Translating text: \"{}\" (placeholder)", source_text);
