@@ -13,6 +13,15 @@ pub struct TranslatorProcessor {
 impl TranslatorProcessor {
     pub fn new(config: AppConfig, text_tx: mpsc::UnboundedSender<String>) -> Result<Self> {
         info!("Initializing CTranslate2 translator (placeholder)");
+        info!("Translation config: {} -> {}", 
+              config.translation.source_language, 
+              config.translation.target_language);
+        
+        if config.translation.source_language == config.translation.target_language {
+            info!("Translation bypass mode: ENABLED (same source and target language)");
+        } else {
+            info!("Translation bypass mode: DISABLED (different source and target languages)");
+        }
         
         // TODO: Implement actual CTranslate2 integration
         // For now, this is just a placeholder that passes through text
@@ -30,13 +39,13 @@ impl TranslatorProcessor {
         
         // Check if source and target languages are the same
         if self.config.translation.source_language == self.config.translation.target_language {
-            info!("Source and target languages match ({}), bypassing translation", 
+            info!("TRANSLATION BYPASS: Source and target languages match ({}), bypassing translation", 
                   self.config.translation.source_language);
-            debug!("Bypassed text: \"{}\"", source_text);
+            info!("BYPASSED TEXT: \"{}\"", source_text);
             return Ok(source_text.to_string());
         }
         
-        debug!("Translating text: \"{}\" (placeholder)", source_text);
+        info!("Translating text: \"{}\" (placeholder)", source_text);
         
         // TODO: Implement actual translation
         // For now, just return the original text

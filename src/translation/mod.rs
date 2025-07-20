@@ -69,7 +69,7 @@ impl TranslationPipeline {
         // Translator -> TTS task
         tokio::spawn(async move {
             while let Some(translated_text) = translator_text_rx.recv().await {
-                info!("Translator -> TTS: \"{}\"", translated_text);
+                info!("Translator -> TTS (bypassed text): \"{}\"", translated_text);
                 // TODO: Send to TTS when ready
                 // tts.process_tts_pipeline(translated_text).await;
             }
