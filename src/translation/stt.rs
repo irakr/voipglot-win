@@ -4,9 +4,9 @@ use cpal::{
     SampleFormat,
 };
 use dasp::Sample;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}};
 use tokio::sync::mpsc;
-use tracing::{error, info};
+use tracing::{error, info, debug};
 use vosk::{DecodingState, Model, Recognizer};
 
 use crate::config::AppConfig;
@@ -16,10 +16,15 @@ pub struct STTProcessor {
     audio_stream: Option<cpal::Stream>,
     text_tx: mpsc::UnboundedSender<String>,
     config: AppConfig,
+    tts_playing: Arc<AtomicBool>,
 }
 
 impl STTProcessor {
-    pub fn new(config: AppConfig, text_tx: mpsc::UnboundedSender<String>) -> Result<Self> {
+    pub fn new(
+        config: AppConfig, 
+        text_tx: mpsc::UnboundedSender<String>,
+        tts_playing: Arc<AtomicBool>
+    ) -> Result<Self> {
         info!("Initializing VOSK STT processor");
         
         // Load VOSK model
@@ -40,6 +45,7 @@ impl STTProcessor {
             audio_stream: None,
             text_tx,
             config,
+            tts_playing,
         })
     }
     
@@ -78,6 +84,8 @@ impl STTProcessor {
         let recognizer = Arc::new(Mutex::new(recognizer));
         
         let text_tx = self.text_tx.clone();
+        let tts_playing = self.tts_playing.clone();
+        let config_clone = self.config.clone();
         
         // Build audio stream like the working test app
         let err_fn = |err| {
@@ -86,66 +94,91 @@ impl STTProcessor {
         
         let recognizer_clone = recognizer.clone();
         let text_tx_clone = text_tx.clone();
+        let tts_playing_clone = tts_playing.clone();
         let stream = match config.sample_format() {
-            SampleFormat::I8 => device.build_input_stream(
-                &config.into(),
-                move |data: &[i8], _| {
-                    let data: Vec<i16> = data.iter().map(|v| v.to_sample()).collect();
-                    let data = if channels != 1 {
-                        Self::stereo_to_mono(&data)
-                    } else {
-                        data
-                    };
-                    
-                    Self::recognize(&mut recognizer_clone.lock().unwrap(), &data, &text_tx_clone);
-                },
-                err_fn,
-                None,
-            ),
-            SampleFormat::I16 => device.build_input_stream(
-                &config.into(),
-                move |data: &[i16], _| {
-                    let data = if channels != 1 {
-                        Self::stereo_to_mono(data)
-                    } else {
-                        data.to_vec()
-                    };
-                    
-                    Self::recognize(&mut recognizer_clone.lock().unwrap(), &data, &text_tx_clone);
-                },
-                err_fn,
-                None,
-            ),
-            SampleFormat::I32 => device.build_input_stream(
-                &config.into(),
-                move |data: &[i32], _| {
-                    let data: Vec<i16> = data.iter().map(|v| v.to_sample()).collect();
-                    let data = if channels != 1 {
-                        Self::stereo_to_mono(&data)
-                    } else {
-                        data
-                    };
-                    
-                    Self::recognize(&mut recognizer_clone.lock().unwrap(), &data, &text_tx_clone);
-                },
-                err_fn,
-                None,
-            ),
-            SampleFormat::F32 => device.build_input_stream(
-                &config.into(),
-                move |data: &[f32], _| {
-                    let data: Vec<i16> = data.iter().map(|v| v.to_sample()).collect();
-                    let data = if channels != 1 {
-                        Self::stereo_to_mono(&data)
-                    } else {
-                        data
-                    };
-                    
-                    Self::recognize(&mut recognizer_clone.lock().unwrap(), &data, &text_tx_clone);
-                },
-                err_fn,
-                None,
-            ),
+            SampleFormat::I8 => {
+                let recognizer_clone = recognizer_clone.clone();
+                let text_tx_clone = text_tx_clone.clone();
+                let tts_playing_clone = tts_playing_clone.clone();
+                let config_clone = config_clone.clone();
+                device.build_input_stream(
+                    &config.into(),
+                    move |data: &[i8], _| {
+                        let data: Vec<i16> = data.iter().map(|v| v.to_sample()).collect();
+                        let data = if channels != 1 {
+                            Self::stereo_to_mono(&data)
+                        } else {
+                            data
+                        };
+                        
+                        Self::recognize(&mut recognizer_clone.lock().unwrap(), &data, &text_tx_clone, &tts_playing_clone, &config_clone);
+                    },
+                    err_fn,
+                    None,
+                )
+            },
+            SampleFormat::I16 => {
+                let recognizer_clone = recognizer_clone.clone();
+                let text_tx_clone = text_tx_clone.clone();
+                let tts_playing_clone = tts_playing_clone.clone();
+                let config_clone = config_clone.clone();
+                device.build_input_stream(
+                    &config.into(),
+                    move |data: &[i16], _| {
+                        let data = if channels != 1 {
+                            Self::stereo_to_mono(data)
+                        } else {
+                            data.to_vec()
+                        };
+                        
+                        Self::recognize(&mut recognizer_clone.lock().unwrap(), &data, &text_tx_clone, &tts_playing_clone, &config_clone);
+                    },
+                    err_fn,
+                    None,
+                )
+            },
+            SampleFormat::I32 => {
+                let recognizer_clone = recognizer_clone.clone();
+                let text_tx_clone = text_tx_clone.clone();
+                let tts_playing_clone = tts_playing_clone.clone();
+                let config_clone = config_clone.clone();
+                device.build_input_stream(
+                    &config.into(),
+                    move |data: &[i32], _| {
+                        let data: Vec<i16> = data.iter().map(|v| v.to_sample()).collect();
+                        let data = if channels != 1 {
+                            Self::stereo_to_mono(&data)
+                        } else {
+                            data
+                        };
+                        
+                        Self::recognize(&mut recognizer_clone.lock().unwrap(), &data, &text_tx_clone, &tts_playing_clone, &config_clone);
+                    },
+                    err_fn,
+                    None,
+                )
+            },
+            SampleFormat::F32 => {
+                let recognizer_clone = recognizer_clone.clone();
+                let text_tx_clone = text_tx_clone.clone();
+                let tts_playing_clone = tts_playing_clone.clone();
+                let config_clone = config_clone.clone();
+                device.build_input_stream(
+                    &config.into(),
+                    move |data: &[f32], _| {
+                        let data: Vec<i16> = data.iter().map(|v| v.to_sample()).collect();
+                        let data = if channels != 1 {
+                            Self::stereo_to_mono(&data)
+                        } else {
+                            data
+                        };
+                        
+                        Self::recognize(&mut recognizer_clone.lock().unwrap(), &data, &text_tx_clone, &tts_playing_clone, &config_clone);
+                    },
+                    err_fn,
+                    None,
+                )
+            },
             sample_format => {
                 return Err(anyhow::anyhow!("Unsupported sample format: {:?}", sample_format));
             }
@@ -166,7 +199,16 @@ impl STTProcessor {
         recognizer: &mut Recognizer,
         data: &[i16],
         text_tx: &mpsc::UnboundedSender<String>,
+        tts_playing: &Arc<AtomicBool>,
+        config: &AppConfig,
     ) {
+        // Check if TTS is currently playing - if so, skip processing to prevent audio feedback
+        // (only if feedback prevention is enabled in config)
+        if config.processing.enable_feedback_prevention && tts_playing.load(Ordering::Relaxed) {
+            debug!("Skipping STT processing - TTS is currently playing (feedback prevention)");
+            return;
+        }
+        
         let state = recognizer.accept_waveform(data);
         
         match state {

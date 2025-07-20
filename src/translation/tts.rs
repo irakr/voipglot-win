@@ -5,23 +5,27 @@ use cpal::{
 };
 use coqui_tts::Synthesizer;
 use tokio::sync::mpsc;
-use tracing::{debug, error, info, warn};
-use std::sync::{Arc, Mutex};
-use std::thread;
+use tracing::{error, info, warn};
+use std::sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}};
 use std::time::Duration;
 
 use crate::config::AppConfig;
 
 pub struct TTSProcessor {
-    text_rx: mpsc::UnboundedReceiver<String>,
+    text_rx: mpsc::Receiver<String>,
     config: AppConfig,
     synthesizer: Option<Synthesizer>,
     audio_device: Option<Device>,
     stream_config: Option<StreamConfig>,
+    tts_playing: Arc<AtomicBool>,
 }
 
 impl TTSProcessor {
-    pub fn new(config: AppConfig, text_rx: mpsc::UnboundedReceiver<String>) -> Result<Self> {
+    pub fn new(
+        config: AppConfig, 
+        text_rx: mpsc::Receiver<String>,
+        tts_playing: Arc<AtomicBool>
+    ) -> Result<Self> {
         info!("Initializing Coqui TTS processor");
         
         // Initialize Coqui TTS synthesizer
@@ -41,6 +45,7 @@ impl TTSProcessor {
             synthesizer: Some(synthesizer),
             audio_device: Some(audio_device),
             stream_config: Some(stream_config),
+            tts_playing,
         })
     }
     
@@ -255,7 +260,9 @@ impl TTSProcessor {
     
 
     
-    async fn play_audio_buffer_async(&self, audio_buffer: Vec<f32>) -> Result<()> {
+    async fn play_audio_buffer_internal(&self, audio_buffer: Vec<f32>) -> Result<()> {
+        // Internal method for audio playback - feedback prevention is handled at higher level
+        
         let device = self.audio_device.as_ref().context("Audio device not initialized")?;
         let config = self.stream_config.as_ref().context("Stream config not initialized")?;
         
@@ -359,13 +366,40 @@ impl TTSProcessor {
             
             info!("Processing TTS for: \"{}\"", text);
             
-            // Use timeout to prevent hanging synthesis
-            match tokio::time::timeout(Duration::from_secs(10), async {
+            // Signal that TTS processing is starting (synthesis + playback) - prevents STT audio feedback
+            if self.config.processing.enable_feedback_prevention {
+                self.tts_playing.store(true, Ordering::Relaxed);
+                info!("TTS processing starting (synthesis + playback) - STT audio capture paused to prevent feedback");
+            }
+            
+            // Create a guard to ensure TTS playing state is reset even if processing fails
+            struct TtsProcessingGuard {
+                tts_playing: Arc<AtomicBool>,
+                config: AppConfig,
+            }
+            
+            impl Drop for TtsProcessingGuard {
+                fn drop(&mut self) {
+                    if self.config.processing.enable_feedback_prevention {
+                        self.tts_playing.store(false, Ordering::Relaxed);
+                        info!("TTS processing ended (cleanup) - STT audio capture resumed");
+                    }
+                }
+            }
+            
+            let _guard = TtsProcessingGuard {
+                tts_playing: self.tts_playing.clone(),
+                config: self.config.clone(),
+            };
+            
+            // Use timeout to prevent hanging synthesis (fast_pitch should complete in <5 seconds)
+            let timeout_secs = self.config.tts.synthesis_timeout_secs;
+            match tokio::time::timeout(Duration::from_secs(timeout_secs), async {
                 self.synthesize_speech(&text)
             }).await {
                 Ok(Ok(audio_buffer)) => {
                     if !audio_buffer.is_empty() {
-                        if let Err(e) = self.play_audio_buffer_async(audio_buffer).await {
+                        if let Err(e) = self.play_audio_buffer_internal(audio_buffer).await {
                             error!("Failed to play audio: {}", e);
                         }
                     }
@@ -374,8 +408,21 @@ impl TTSProcessor {
                     error!("TTS synthesis failed: {}", e);
                 }
                 Err(_) => {
-                    error!("TTS synthesis timed out after 10 seconds");
+                    error!("TTS synthesis timed out after {} seconds (this suggests a problem with the TTS model)", timeout_secs);
                 }
+            }
+            
+            // Add silence buffer after complete TTS processing
+            if self.config.processing.enable_feedback_prevention {
+                let silence_buffer_ms = self.config.processing.tts_silence_buffer_ms;
+                if silence_buffer_ms > 0 {
+                    info!("Waiting {}ms silence buffer after TTS processing", silence_buffer_ms);
+                    tokio::time::sleep(Duration::from_millis(silence_buffer_ms as u64)).await;
+                }
+                
+                // Reset TTS playing state manually (guard will also reset it)
+                self.tts_playing.store(false, Ordering::Relaxed);
+                info!("TTS processing completed - STT audio capture resumed");
             }
             
             // Yield to allow other tasks to run

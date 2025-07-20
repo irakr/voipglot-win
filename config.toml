@@ -21,6 +21,12 @@ silence_threshold = 0.01
 chunk_duration_ms = 100
 noise_reduction = true
 echo_cancellation = true
+# Audio feedback prevention - pauses STT when TTS is playing to prevent loops
+enable_feedback_prevention = true
+# Additional silence after TTS playback to ensure clean audio separation (milliseconds)
+tts_silence_buffer_ms = 50
+# Maximum number of TTS requests that can be queued (prevents backlog during slow synthesis)
+tts_queue_size = 3
 
 [stt]
 # Speech-to-Text configuration (VOSK)
@@ -36,7 +42,7 @@ enable_partial_results = true
 provider = "ct2"
 model_path = "models/nllb-200-ct2"
 source_language = "eng_Latn"
-target_language = "spa_Latn"
+target_language = "eng_Latn"
 num_threads = 4
 device = "cpu"
 max_batch_size = 32
@@ -45,10 +51,12 @@ beam_size = 4
 [tts]
 # Text-to-Speech configuration (Coqui TTS)
 provider = "coqui"
-model_path = "tts_models/en/ljspeech/tacotron2-DDC"
+model_path = "tts_models/en/ljspeech/fast_pitch"
 voice_speed = 1.0
 voice_pitch = 1.0
 enable_gpu = false
+# Synthesis timeout in seconds (fast_pitch should complete in 1-3 seconds)
+synthesis_timeout_secs = 5
 
 [logging]
 # Logging configuration

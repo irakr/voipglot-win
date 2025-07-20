@@ -70,6 +70,7 @@ pub struct TtsConfig {
     pub voice_speed: f32,
     pub voice_pitch: f32,
     pub enable_gpu: bool,
+    pub synthesis_timeout_secs: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -78,6 +79,9 @@ pub struct ProcessingConfig {
     pub silence_threshold: f32,
     pub noise_reduction: bool,
     pub echo_cancellation: bool,
+    pub enable_feedback_prevention: bool,
+    pub tts_silence_buffer_ms: u32,
+    pub tts_queue_size: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -168,10 +172,11 @@ impl Default for TtsConfig {
     fn default() -> Self {
         Self {
             provider: "coqui".to_string(),
-            model_path: "tts_models/en/ljspeech/tacotron2-DDC".to_string(),
+            model_path: "tts_models/en/ljspeech/fast_pitch".to_string(),
             voice_speed: 1.0,
             voice_pitch: 1.0,
             enable_gpu: false,
+            synthesis_timeout_secs: 5,
         }
     }
 }
@@ -183,6 +188,9 @@ impl Default for ProcessingConfig {
             silence_threshold: 0.01,
             noise_reduction: true,
             echo_cancellation: true,
+            enable_feedback_prevention: true,
+            tts_silence_buffer_ms: 50,
+            tts_queue_size: 3,
         }
     }
 }
