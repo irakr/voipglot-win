@@ -1,6 +1,6 @@
 use anyhow::Result;
 use clap::Parser;
-use tracing::info;
+use tracing::{error, info};
 use tracing_subscriber;
 use cpal::traits::{HostTrait, DeviceTrait};
 use std::sync::Arc;
@@ -80,16 +80,20 @@ async fn main() -> Result<()> {
         config.translation.target_language = target_lang;
     }
     if let Some(sample_rate) = args.sample_rate {
-        config.audio.sample_rate = sample_rate;
+        config.audio_input.sample_rate = sample_rate;
+        config.audio_output.sample_rate = sample_rate;
     }
     if let Some(channels) = args.channels {
-        config.audio.channels = channels;
+        config.audio_input.channels = channels;
+        config.audio_output.channels = channels;
     }
     if let Some(buffer_size) = args.buffer_size {
-        config.audio.buffer_size = buffer_size;
+        config.audio_input.buffer_size = buffer_size;
+        config.audio_output.buffer_size = buffer_size;
     }
     if let Some(latency_ms) = args.latency_ms {
-        config.audio.latency_ms = latency_ms;
+        config.audio_input.latency_ms = latency_ms;
+        config.audio_output.latency_ms = latency_ms;
     }
     if let Some(silence_threshold) = args.silence_threshold {
         config.processing.silence_threshold = silence_threshold;
@@ -118,7 +122,14 @@ async fn main() -> Result<()> {
     info!("Starting VoipGlot pipeline...");
     
     audio_manager.start()?;
-    translation_pipeline.start()?;
+    
+    // Start translation pipeline in background
+    let mut pipeline = translation_pipeline;
+    let pipeline_handle = tokio::spawn(async move {
+        if let Err(e) = pipeline.start().await {
+            error!("Translation pipeline error: {}", e);
+        }
+    });
     
     info!("VoipGlot is running. Press Ctrl+C to stop.");
     info!("STT module is active - speak into your microphone to test transcription.");
@@ -139,7 +150,10 @@ async fn main() -> Result<()> {
     
     // Shutdown
     info!("Shutting down VoipGlot...");
-    translation_pipeline.stop();
+    
+    // Cancel the pipeline task
+    pipeline_handle.abort();
+    
     audio_manager.stop();
     
     info!("VoipGlot shutdown complete.");

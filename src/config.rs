@@ -13,7 +13,8 @@ where
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
-    pub audio: AudioConfig,
+    pub audio_input: AudioInputConfig,
+    pub audio_output: AudioOutputConfig,
     pub stt: SttConfig,
     pub translation: TranslationConfig,
     pub tts: TtsConfig,
@@ -22,16 +23,24 @@ pub struct AppConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AudioConfig {
+pub struct AudioInputConfig {
     #[serde(deserialize_with = "deserialize_optional_string")]
     pub input_device: Option<String>,
+    pub sample_rate: u32,
+    pub channels: u16,
+    pub buffer_size: usize,
+    pub latency_ms: u32,
+    pub vb_cable_device: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AudioOutputConfig {
     #[serde(deserialize_with = "deserialize_optional_string")]
     pub output_device: Option<String>,
     pub sample_rate: u32,
     pub channels: u16,
     pub buffer_size: usize,
     pub latency_ms: u32,
-    pub vb_cable_device: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -58,8 +67,6 @@ pub struct TranslationConfig {
 pub struct TtsConfig {
     pub provider: String,
     pub model_path: String,
-    pub sample_rate: u32,
-    pub channels: u16,
     pub voice_speed: f32,
     pub voice_pitch: f32,
     pub enable_gpu: bool,
@@ -95,7 +102,8 @@ impl AppConfig {
 
     pub fn default() -> Self {
         Self {
-            audio: AudioConfig::default(),
+            audio_input: AudioInputConfig::default(),
+            audio_output: AudioOutputConfig::default(),
             stt: SttConfig::default(),
             translation: TranslationConfig::default(),
             tts: TtsConfig::default(),
@@ -105,16 +113,27 @@ impl AppConfig {
     }
 }
 
-impl Default for AudioConfig {
+impl Default for AudioInputConfig {
     fn default() -> Self {
         Self {
             input_device: None,
-            output_device: None,
             sample_rate: 16000,
             channels: 1,
             buffer_size: 1024,
             latency_ms: 50,
             vb_cable_device: "CABLE Input (VB-Audio Virtual Cable)".to_string(),
+        }
+    }
+}
+
+impl Default for AudioOutputConfig {
+    fn default() -> Self {
+        Self {
+            output_device: None,
+            sample_rate: 48000,
+            channels: 2,
+            buffer_size: 2048,
+            latency_ms: 100,
         }
     }
 }
@@ -150,8 +169,6 @@ impl Default for TtsConfig {
         Self {
             provider: "coqui".to_string(),
             model_path: "tts_models/en/ljspeech/tacotron2-DDC".to_string(),
-            sample_rate: 22050,
-            channels: 1,
             voice_speed: 1.0,
             voice_pitch: 1.0,
             enable_gpu: false,

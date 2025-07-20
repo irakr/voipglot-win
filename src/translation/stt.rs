@@ -210,4 +210,16 @@ impl STTProcessor {
         // Drop the stream to stop audio capture
         self.audio_stream = None;
     }
+    
+    pub async fn start_processing(&mut self) -> Result<()> {
+        info!("Starting STT processing");
+        
+        // Start audio capture
+        self.start_audio_capture()?;
+        
+        // Keep the task alive - audio processing happens in the background stream
+        loop {
+            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        }
+    }
 }

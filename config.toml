@@ -1,12 +1,19 @@
-﻿[audio]
-# Audio configuration
+﻿[audio_input]
+# Audio input configuration (for STT)
 input_device = ""
-output_device = ""
 sample_rate = 16000
 channels = 1
 buffer_size = 1024
 latency_ms = 50
 vb_cable_device = "CABLE Input (VB-Audio Virtual Cable)"
+
+[audio_output]
+# Audio output configuration (for TTS)
+output_device = ""
+sample_rate = 48000
+channels = 2
+buffer_size = 2048
+latency_ms = 100
 
 [processing]
 # Audio processing configuration
@@ -39,8 +46,6 @@ beam_size = 4
 # Text-to-Speech configuration (Coqui TTS)
 provider = "coqui"
 model_path = "tts_models/en/ljspeech/tacotron2-DDC"
-sample_rate = 22050
-channels = 1
 voice_speed = 1.0
 voice_pitch = 1.0
 enable_gpu = false

@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use ct2rs::{Device, Translator, TranslationOptions, ComputeType};
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
