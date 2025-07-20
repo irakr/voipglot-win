@@ -67,6 +67,8 @@ impl TranslationPipeline {
                 if let Err(e) = translator.process_translation_pipeline(text) {
                     error!("Translation pipeline error: {}", e);
                 }
+                // Add small yield to ensure responsiveness
+                tokio::task::yield_now().await;
             }
             info!("STT → Translator pipeline task ended");
         });
@@ -78,7 +80,10 @@ impl TranslationPipeline {
                 debug!("Received translated text: \"{}\"", translated_text);
                 if let Err(e) = tts_text_tx.send(translated_text) {
                     error!("Failed to send text to TTS: {}", e);
+                    break; // Exit if TTS channel is closed
                 }
+                // Add small yield to ensure responsiveness
+                tokio::task::yield_now().await;
             }
             info!("Translator → TTS pipeline task ended");
         });

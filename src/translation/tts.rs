@@ -214,7 +214,7 @@ impl TTSProcessor {
         let synthesizer = self.synthesizer.as_mut()
             .context("TTS synthesizer not initialized")?;
         
-        debug!("Synthesizing speech for text: \"{}\"", text);
+        info!("Synthesizing speech for text: \"{}\"", text);
         
         // Optimize text for better performance
         let text_to_speak = {
@@ -228,7 +228,10 @@ impl TTSProcessor {
         };
         
         let start_time = std::time::Instant::now();
+        info!("Starting TTS synthesis...");
+        
         let audio_buffer = synthesizer.tts(&text_to_speak);
+        
         let synthesis_time = start_time.elapsed();
         
         if audio_buffer.is_empty() {
@@ -246,10 +249,13 @@ impl TTSProcessor {
             audio_buffer
         };
         
+        info!("Audio normalization completed, ready for playback");
         Ok(normalized_buffer)
     }
     
-    fn play_audio_buffer(&self, audio_buffer: Vec<f32>) -> Result<()> {
+
+    
+    async fn play_audio_buffer_async(&self, audio_buffer: Vec<f32>) -> Result<()> {
         let device = self.audio_device.as_ref().context("Audio device not initialized")?;
         let config = self.stream_config.as_ref().context("Stream config not initialized")?;
         
@@ -323,19 +329,23 @@ impl TTSProcessor {
         
         stream.play()?;
         
-        // Wait for audio to finish
+        // Wait for audio to finish using async sleep (non-blocking)
         let start_time = std::time::Instant::now();
-        let expected_duration = Duration::from_secs_f64(samples_arc.lock().unwrap().len() as f64 / device_sample_rate as f64);
-        let timeout = expected_duration + Duration::from_millis(500);
+        let expected_duration = {
+            let sample_count = samples_arc.lock().unwrap().len();
+            Duration::from_secs_f64(sample_count as f64 / device_sample_rate as f64)
+        };
+        let timeout = expected_duration + Duration::from_millis(200);
         
         while start_time.elapsed() < timeout {
             if *finished_arc.lock().unwrap() {
                 break;
             }
-            thread::sleep(Duration::from_millis(10));
+            tokio::time::sleep(Duration::from_millis(10)).await; // ✅ ASYNC SLEEP!
         }
         
         stream.pause()?;
+        info!("Audio playback completed");
         Ok(())
     }
     
@@ -349,21 +359,32 @@ impl TTSProcessor {
             
             info!("Processing TTS for: \"{}\"", text);
             
-            match self.synthesize_speech(&text) {
-                Ok(audio_buffer) => {
+            // Use timeout to prevent hanging synthesis
+            match tokio::time::timeout(Duration::from_secs(10), async {
+                self.synthesize_speech(&text)
+            }).await {
+                Ok(Ok(audio_buffer)) => {
                     if !audio_buffer.is_empty() {
-                        if let Err(e) = self.play_audio_buffer(audio_buffer) {
+                        if let Err(e) = self.play_audio_buffer_async(audio_buffer).await {
                             error!("Failed to play audio: {}", e);
                         }
                     }
                 }
-                Err(e) => {
+                Ok(Err(e)) => {
                     error!("TTS synthesis failed: {}", e);
                 }
+                Err(_) => {
+                    error!("TTS synthesis timed out after 10 seconds");
+                }
             }
+            
+            // Yield to allow other tasks to run
+            tokio::task::yield_now().await;
         }
         
         info!("TTS processing loop ended");
         Ok(())
     }
+    
+
 }

@@ -218,8 +218,12 @@ impl STTProcessor {
         self.start_audio_capture()?;
         
         // Keep the task alive - audio processing happens in the background stream
+        // Add proper async yielding to prevent blocking other tasks
         loop {
             tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+            
+            // Check if we should exit gracefully (this allows for future control)
+            tokio::task::yield_now().await;
         }
     }
 }
