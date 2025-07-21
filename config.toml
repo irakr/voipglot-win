@@ -51,6 +51,9 @@ beam_size = 4
 [tts]
 # Text-to-Speech configuration (Coqui TTS)
 provider = "coqui"
+# Model identifier - Coqui TTS will handle caching automatically
+# Local models downloaded during build are used for offline verification only
+# Always use model identifiers (not file paths) for compatibility with Rust bindings
 model_path = "tts_models/en/ljspeech/fast_pitch"
 voice_speed = 1.0
 voice_pitch = 1.0

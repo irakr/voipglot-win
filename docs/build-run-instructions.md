@@ -32,11 +32,11 @@
 ### Required Models
 - **VOSK Model**: `vosk-model-small-en-us-0.15` (auto-downloaded)
 - **CT2 Model**: NLLB-200 CT2 format (manual download required)
-- **Coqui TTS Model**: `tts_models/en/ljspeech/fast_pitch` (auto-downloaded)
+- **Coqui TTS Model**: `tts_models/en/ljspeech/fast_pitch` (auto-downloaded and cached)
 
 ## Building the Application
 
-### Method 1: Integrated Build Script (Recommended)
+### Method 1: Build Script (Recommended)
 
 ```powershell
 # Open Developer PowerShell as Administrator
@@ -44,10 +44,10 @@
 cd voipglot-win
 
 # Build with automatic model download
-.\build-integrated.ps1 -DownloadModels -Release
+.\build.ps1 -DownloadModels -Release
 
 # Or build without downloading models (if you have them)
-.\build-integrated.ps1 -Release
+.\build.ps1 -Release
 ```
 
 ### Method 2: Manual Build
@@ -343,7 +343,7 @@ ls models/
 ls tts_models/
 
 # Download missing models
-.\build-integrated.ps1 -DownloadModels -Release
+.\build.ps1 -DownloadModels -Release
 ```
 
 #### 3. Audio Quality Issues
@@ -434,7 +434,7 @@ git clone <repository-url>
 cd voipglot-win
 
 # 3. Build with models
-.\build-integrated.ps1 -DownloadModels -Release
+.\build.ps1 -DownloadModels -Release
 
 # 4. List devices
 .\target\release\voipglot-win.exe --list-devices

@@ -39,7 +39,7 @@ The Coqui TTS module from `tests/tts-coqui` has been successfully integrated int
 
 ### 4. Build System
 
-**build-integrated.ps1**:
+**build.ps1**:
 - Added Coqui TTS model path checking
 - Added Python TTS dependency setup
 - Integrated with existing model validation system

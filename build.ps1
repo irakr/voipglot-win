@@ -138,10 +138,34 @@ if (-not (Test-Path $ct2Path)) {
     Write-Host "CT2 model found: $ct2Path" -ForegroundColor Green
 }
 
-# Note: Coqui TTS models are downloaded automatically at runtime, not required at build time
-Write-Host "Coqui TTS model: Will be downloaded automatically on first use" -ForegroundColor Green
-Write-Host "  - Model path: $coquiPath" -ForegroundColor Gray
-Write-Host "  - No build-time setup required" -ForegroundColor Gray
+# Check Coqui TTS model
+$coquiModelPath = "models/tts_models/en/ljspeech/fast_pitch"
+if (-not (Test-Path $coquiModelPath)) {
+    Write-Host "Coqui TTS model not found at: $coquiModelPath" -ForegroundColor Red
+    if ($DownloadModels -or $ForceDownload) {
+        Write-Host "Setting up Coqui TTS model using Python script..." -ForegroundColor Yellow
+        try {
+            python scripts/setup-coqui.py
+            if ($LASTEXITCODE -eq 0) {
+                Write-Host "Coqui TTS model setup completed successfully" -ForegroundColor Green
+                $allModelsPresent = $true
+            } else {
+                Write-Host "Error setting up Coqui TTS model" -ForegroundColor Red
+                $allModelsPresent = $false
+            }
+        }
+        catch {
+            Write-Host "Error running Coqui TTS setup script: $_" -ForegroundColor Red
+            Write-Host "Models will be downloaded automatically on first use" -ForegroundColor Yellow
+            # Don't fail build for TTS models - they can be downloaded at runtime
+        }
+    } else {
+        Write-Host "Coqui TTS model will be downloaded automatically on first use" -ForegroundColor Yellow
+    }
+} else {
+    Write-Host "Coqui TTS model found: $coquiModelPath" -ForegroundColor Green
+}
+
 
 if (-not $allModelsPresent) {
     Write-Host "" 

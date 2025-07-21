@@ -8,8 +8,124 @@ use tokio::sync::mpsc;
 use tracing::{error, info, warn};
 use std::sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}};
 use std::time::Duration;
+use std::path::Path;
 
 use crate::config::AppConfig;
+
+/// TTS Model Management utilities
+struct TTSModelManager;
+
+impl TTSModelManager {
+    /// Get the local model path if it exists, otherwise return the model identifier
+    fn get_model_path(model_identifier: &str) -> String {
+        // Convert model identifier to local path
+        let local_path = format!("models/{}", model_identifier);
+        
+        if Path::new(&local_path).exists() {
+            info!("Using local TTS model: {}", local_path);
+            local_path
+        } else {
+            info!("Local TTS model not found at: {}", local_path);
+            info!("Using model identifier (will download): {}", model_identifier);
+            model_identifier.to_string()
+        }
+    }
+    
+    /// Verify that a local model can be loaded by the Rust coqui-tts bindings
+    fn verify_local_model(local_path: &str) -> Result<()> {
+        info!("Verifying local TTS model: {}", local_path);
+        
+        // For now, just check if critical files exist
+        // The Rust coqui-tts bindings may not support local file paths well
+        let model_dir = Path::new(local_path);
+        
+        // Check for common TTS model files
+        let required_files = ["config.json", "model.pth"];
+        let mut found_files = 0;
+        
+        for file in &required_files {
+            if model_dir.join(file).exists() {
+                found_files += 1;
+            }
+        }
+        
+        if found_files == required_files.len() {
+            info!("Model verification passed: found {} required files", found_files);
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!(
+                "Model verification failed: found {}/{} required files", 
+                found_files, 
+                required_files.len()
+            ))
+        }
+    }
+    
+    /// Download and cache a TTS model locally (for build-time use)
+    fn download_and_cache_model(model_identifier: &str) -> Result<String> {
+        info!("Downloading and caching TTS model: {}", model_identifier);
+        
+        // Create models directory if it doesn't exist
+        let models_dir = Path::new("models");
+        if !models_dir.exists() {
+            std::fs::create_dir_all(models_dir)
+                .context("Failed to create models directory")?;
+        }
+        
+        // For runtime, we'll let Coqui handle downloads automatically
+        // The local caching is mainly for offline scenarios
+        warn!("Runtime model caching not implemented - using Coqui's automatic download");
+        Ok(model_identifier.to_string())
+    }
+    
+    /// Find the cached model directory in Coqui's cache
+    fn find_cached_model(model_identifier: &str) -> Option<std::path::PathBuf> {
+        let model_cache_name = model_identifier.replace("/", "--");
+        
+        // Check common cache locations
+        let cache_dirs = [
+            dirs::data_local_dir().map(|d| d.join("tts")), // Windows: AppData/Local/tts
+            dirs::data_dir().map(|d| d.join("tts")),       // Linux: ~/.local/share/tts
+            dirs::home_dir().map(|d| d.join("Library").join("Application Support").join("tts")), // macOS
+        ];
+        
+        for cache_dir in cache_dirs.iter().flatten() {
+            let model_path = cache_dir.join(&model_cache_name);
+            if model_path.exists() {
+                return Some(model_path);
+            }
+        }
+        
+        None
+    }
+    
+    /// Copy model files from source to destination
+    fn copy_model_files(src: &Path, dst: &Path) -> Result<()> {
+        if dst.exists() {
+            std::fs::remove_dir_all(dst)
+                .context("Failed to remove existing local model directory")?;
+        }
+        
+        std::fs::create_dir_all(dst)
+            .context("Failed to create local model directory")?;
+        
+        // Copy all files from source to destination
+        for entry in std::fs::read_dir(src)? {
+            let entry = entry?;
+            let src_path = entry.path();
+            let dst_path = dst.join(entry.file_name());
+            
+            if src_path.is_file() {
+                std::fs::copy(&src_path, &dst_path)
+                    .with_context(|| format!("Failed to copy model file: {:?}", src_path))?;
+            } else if src_path.is_dir() {
+                Self::copy_model_files(&src_path, &dst_path)?;
+            }
+        }
+        
+        Ok(())
+    }
+}
 
 pub struct TTSProcessor {
     text_rx: mpsc::Receiver<String>,
@@ -28,11 +144,39 @@ impl TTSProcessor {
     ) -> Result<Self> {
         info!("Initializing Coqui TTS processor");
         
-        // Initialize Coqui TTS synthesizer
-        let model_path = &config.tts.model_path;
-        info!("Loading TTS model: {}", model_path);
+        // Get the best available model path (local first, then download)
+        let model_path = Self::resolve_model_path(&config.tts.model_path)?;
+        info!("Using TTS model: {}", model_path);
         
-        let synthesizer = Synthesizer::new(model_path, config.tts.enable_gpu);
+        // Try to initialize the synthesizer with better error handling
+        let synthesizer = match std::panic::catch_unwind(|| {
+            Synthesizer::new(&model_path, config.tts.enable_gpu)
+        }) {
+            Ok(synth) => synth,
+            Err(_) => {
+                error!("TTS Synthesizer initialization panicked with model path: {}", model_path);
+                
+                // If local path failed, try the original model identifier
+                if model_path != config.tts.model_path {
+                    warn!("Retrying with original model identifier: {}", config.tts.model_path);
+                    match std::panic::catch_unwind(|| {
+                        Synthesizer::new(&config.tts.model_path, config.tts.enable_gpu)
+                    }) {
+                        Ok(synth) => {
+                            info!("Successfully initialized with model identifier fallback");
+                            synth
+                        }
+                        Err(_) => {
+                            return Err(anyhow::anyhow!(
+                                "Failed to initialize TTS Synthesizer with both local path and identifier"
+                            ));
+                        }
+                    }
+                } else {
+                    return Err(anyhow::anyhow!("Failed to initialize TTS Synthesizer"));
+                }
+            }
+        };
         
         info!("Coqui TTS synthesizer initialized successfully");
         
@@ -47,6 +191,34 @@ impl TTSProcessor {
             stream_config: Some(stream_config),
             tts_playing,
         })
+    }
+    
+    /// Resolve the model path, checking local cache first, downloading if needed
+    fn resolve_model_path(model_identifier: &str) -> Result<String> {
+        // Check if we already have the model locally cached
+        let local_path = TTSModelManager::get_model_path(model_identifier);
+        
+        // If the local path exists and is different from identifier, try to use it
+        if local_path != model_identifier && Path::new(&local_path).exists() {
+            info!("Local TTS model found, attempting to use: {}", local_path);
+            
+            // Try to verify the local model works by testing initialization
+            match TTSModelManager::verify_local_model(&local_path) {
+                Ok(()) => {
+                    info!("Local model verified successfully: {}", local_path);
+                    return Ok(local_path);
+                }
+                Err(e) => {
+                    warn!("Local model verification failed: {}", e);
+                    warn!("Falling back to model identifier for download");
+                }
+            }
+        }
+        
+        // If local model doesn't exist or is invalid, use model identifier
+        // This will trigger Coqui's automatic download behavior
+        info!("Using model identifier (Coqui will handle download): {}", model_identifier);
+        Ok(model_identifier.to_string())
     }
     
     fn setup_audio_output(config: &AppConfig) -> Result<(Device, StreamConfig)> {

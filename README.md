@@ -69,9 +69,10 @@ If you prefer to download models manually:
 1. Download NLLB-200 model from [https://huggingface.co/facebook/nllb-200-3.3B](https://huggingface.co/facebook/nllb-200-3.3B)
 2. Extract to `models/nllb-200-ct2`
 
-##### Coqui TTS Model (Optional for TTS)
-1. Download Coqui TTS model from [https://huggingface.co/coqui/XTTS-v2](https://huggingface.co/coqui/XTTS-v2)
-2. Extract to `models/coqui-tts-model`
+##### Coqui TTS Model (Auto-downloaded)
+- TTS models are automatically downloaded and cached during build or first run
+- Default model: `tts_models/en/ljspeech/fast_pitch` (cached in `models/` directory)
+- No manual download required
 
 ## Building
 
@@ -97,7 +98,7 @@ For downloading required models:
 .\build.ps1 -DownloadModels
 ```
 
-For downloading all missing models (including optional ones):
+For downloading all missing models (including TTS models):
 ```powershell
 .\build.ps1 -ForceDownload
 ```
