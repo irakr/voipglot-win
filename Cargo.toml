@@ -6,29 +6,11 @@ authors = ["VoipGlot Team"]
 description = "Real-time audio translation for Windows gaming and VOIP applications"
 
 [dependencies]
-# Audio processing
-cpal = "=0.16.0"
-symphonia = { version = "=0.5.4", features = ["all"] }
-dasp = "=0.11.0"
-
-# Windows API bindings
-windows = { version = "=0.56.0", features = [
-    "Win32_Foundation",
-    "Win32_System_Com",
-    "Win32_UI_Shell_PropertiesSystem",
-    "Win32_Media_Audio",
-    "Win32_Media_MediaFoundation",
-    "Win32_System_Threading",
-    "Win32_System_SystemServices",
-    "Win32_UI_WindowsAndMessaging",
-    "Win32_Media_Speech"
-] }
+# VoipGlot Core Library
+voipglot-core = { path = "../voipglot-core" }
 
 # Async runtime
 tokio = { version = "=1.36.0", features = ["full"] }
-
-# HTTP client for API calls
-reqwest = { version = "=0.12.4", features = ["json"] }
 
 # Serialization
 serde = { version = "=1.0.197", features = ["derive"] }
@@ -43,28 +25,19 @@ tracing = "=0.1.40"
 tracing-subscriber = { version = "=0.3.18", features = ["env-filter"] }
 tracing-appender = "=0.2.3"
 
-# Error handling - Updated to compatible version
+# Error handling
 anyhow = "=1.0.98"
 thiserror = "=1.0.56"
 
 # Utilities
-clap = { version = "=4.5.1", features = ["derive"] }
+clap = { version = "=4.4.12", features = ["derive"] }
 futures = "=0.3.30"
-ctrlc = "=3.4"
+ctrlc = "=3.4.1"
 dirs = "=5.0.1"
 
 # Additional dependencies
 base64 = "=0.22.0"
 lazy_static = "=1.4.0"
-
-# VOSK for Speech-to-Text
-vosk = "0.2.0"
-
-# CTranslate2 for translation
-ct2rs = { version = "0.9", features = ["default"] }
-
-# Coqui TTS bindings
-coqui-tts = "0.2.0"
 
 # Simple logging for compatibility
 env_logger = "0.10.0"
@@ -79,7 +52,6 @@ windows = { version = "=0.56.0", features = [
 
 [build-dependencies]
 cc = "1.0"
-pyo3-build-config = "0.20"
 
 [dev-dependencies]
 tokio-test = "=0.4.3"

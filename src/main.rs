@@ -1,21 +1,19 @@
+//! # VoipGlot Windows Application
+//! 
+//! This is the Windows-specific application that uses the VoipGlot Core library
+//! to provide real-time audio translation for Windows gaming and VOIP applications.
+//! 
+//! This application demonstrates how to integrate the voipglot-core library
+//! into a Windows-specific application with proper configuration and logging.
+
 use anyhow::Result;
 use clap::Parser;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 use tracing_subscriber;
-use cpal::traits::{HostTrait, DeviceTrait};
+use voipglot_core::{VoipGlotPipeline, PipelineConfig};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::OnceLock;
-
-mod audio;
-mod translation;
-mod config;
-mod error;
-
-use audio::AudioManager;
-use config::AppConfig;
-
-use translation::TranslationPipeline;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -69,44 +67,11 @@ struct Args {
 async fn main() -> Result<()> {
     let args = Args::parse();
     
-    // Load configuration
-    let mut config = AppConfig::load(&args.config)?;
-    
-    // Override config with command line arguments
-    if let Some(source_lang) = args.source_lang {
-        config.translation.source_language = source_lang;
-    }
-    if let Some(target_lang) = args.target_lang {
-        config.translation.target_language = target_lang;
-    }
-    if let Some(sample_rate) = args.sample_rate {
-        config.audio_input.sample_rate = sample_rate;
-        config.audio_output.sample_rate = sample_rate;
-    }
-    if let Some(channels) = args.channels {
-        config.audio_input.channels = channels;
-        config.audio_output.channels = channels;
-    }
-    if let Some(buffer_size) = args.buffer_size {
-        config.audio_input.buffer_size = buffer_size;
-        config.audio_output.buffer_size = buffer_size;
-    }
-    if let Some(latency_ms) = args.latency_ms {
-        config.audio_input.latency_ms = latency_ms;
-        config.audio_output.latency_ms = latency_ms;
-    }
-    if let Some(silence_threshold) = args.silence_threshold {
-        config.processing.silence_threshold = silence_threshold;
-    }
-    if let Some(chunk_duration_ms) = args.chunk_duration_ms {
-        config.processing.chunk_duration_ms = chunk_duration_ms;
-    }
-    
     // Initialize logging
-    init_logging(&config, args.debug)?;
+    init_logging(args.debug)?;
     
-    info!("VoipGlot starting up...");
-    info!("Configuration loaded from: {}", args.config);
+    info!("Starting VoipGlot Windows Application");
+    info!("Using VoipGlot Core library for audio processing and translation");
     
     // List audio devices if requested
     if args.list_devices {
@@ -114,27 +79,80 @@ async fn main() -> Result<()> {
         return Ok(());
     }
     
-    // Initialize components
-    let mut audio_manager = AudioManager::new(config.clone());
-    let mut translation_pipeline = TranslationPipeline::new(config.clone())?;
-    
-    // Start the pipeline
-    info!("Starting VoipGlot pipeline...");
-    
-    audio_manager.start()?;
-    
-    // Start translation pipeline in background
-    let mut pipeline = translation_pipeline;
-    let pipeline_handle = tokio::spawn(async move {
-        if let Err(e) = pipeline.start().await {
-            error!("Translation pipeline error: {}", e);
+    // Load configuration
+    let mut config = match PipelineConfig::load(&args.config) {
+        Ok(config) => {
+            info!("Configuration loaded successfully from {}", args.config);
+            config
         }
-    });
+        Err(e) => {
+            error!("Failed to load configuration: {}", e);
+            info!("Using default configuration");
+            PipelineConfig::default()
+        }
+    };
     
-    info!("VoipGlot is running. Press Ctrl+C to stop.");
-    info!("STT module is active - speak into your microphone to test transcription.");
+    // Override config with command line arguments
+    if let Some(source_lang) = args.source_lang {
+        config.translation.source_language = source_lang;
+        info!("Source language set to: {}", config.translation.source_language);
+    }
+    if let Some(target_lang) = args.target_lang {
+        config.translation.target_language = target_lang;
+        info!("Target language set to: {}", config.translation.target_language);
+    }
+    if let Some(sample_rate) = args.sample_rate {
+        config.audio.input.sample_rate = sample_rate;
+        config.audio.output.sample_rate = sample_rate;
+        info!("Sample rate set to: {} Hz", sample_rate);
+    }
+    if let Some(channels) = args.channels {
+        config.audio.input.channels = channels;
+        config.audio.output.channels = channels;
+        info!("Audio channels set to: {}", channels);
+    }
+    if let Some(buffer_size) = args.buffer_size {
+        config.audio.input.buffer_size = buffer_size;
+        config.audio.output.buffer_size = buffer_size;
+        info!("Buffer size set to: {} samples", buffer_size);
+    }
+    if let Some(latency_ms) = args.latency_ms {
+        config.audio.input.latency_ms = latency_ms;
+        config.audio.output.latency_ms = latency_ms;
+        info!("Latency set to: {} ms", latency_ms);
+    }
+    if let Some(silence_threshold) = args.silence_threshold {
+        config.processing.silence_threshold = silence_threshold;
+        info!("Silence threshold set to: {}", silence_threshold);
+    }
+    if let Some(chunk_duration_ms) = args.chunk_duration_ms {
+        config.processing.chunk_duration_ms = chunk_duration_ms;
+        info!("Chunk duration set to: {} ms", chunk_duration_ms);
+    }
     
-    // Wait for interrupt signal
+    // Log pipeline configuration
+    info!("Pipeline configuration:");
+    info!("  STT Provider: {}", config.stt.provider);
+    info!("  STT Model: {}", config.stt.model_path);
+    info!("  Translation Provider: {}", config.translation.provider);
+    info!("  Translation Model: {}", config.translation.model_path);
+    info!("  TTS Provider: {}", config.tts.provider);
+    info!("  TTS Model: {}", config.tts.model_path);
+    info!("  Language Pair: {} → {}", config.translation.source_language, config.translation.target_language);
+    
+    // Create pipeline using core library
+    let mut pipeline = match VoipGlotPipeline::new(config) {
+        Ok(pipeline) => {
+            info!("Pipeline created successfully");
+            pipeline
+        }
+        Err(e) => {
+            error!("Failed to create pipeline: {}", e);
+            return Err(e.into());
+        }
+    };
+    
+    // Setup graceful shutdown
     let running = Arc::new(AtomicBool::new(true));
     let r = running.clone();
     
@@ -143,24 +161,34 @@ async fn main() -> Result<()> {
         r.store(false, Ordering::SeqCst);
     })?;
     
-    // Main loop
+    // Start processing
+    info!("Starting pipeline...");
+    if let Err(e) = pipeline.start().await {
+        error!("Failed to start pipeline: {}", e);
+        return Err(e.into());
+    }
+    
+    info!("Pipeline started successfully. Press Ctrl+C to stop.");
+    info!("VoipGlot Windows is running with real-time audio translation.");
+    
+    // Keep running until interrupted
     while running.load(Ordering::SeqCst) {
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
     }
     
-    // Shutdown
-    info!("Shutting down VoipGlot...");
+    // Stop processing
+    info!("Stopping pipeline...");
+    if let Err(e) = pipeline.stop().await {
+        error!("Failed to stop pipeline: {}", e);
+        return Err(e.into());
+    }
     
-    // Cancel the pipeline task
-    pipeline_handle.abort();
-    
-    audio_manager.stop();
-    
-    info!("VoipGlot shutdown complete.");
+    info!("Pipeline stopped successfully");
+    info!("VoipGlot Windows shutdown complete.");
     Ok(())
 }
 
-fn init_logging(config: &AppConfig, debug_flag: bool) -> Result<()> {
+fn init_logging(debug_flag: bool) -> Result<()> {
     use tracing_subscriber::fmt;
     use tracing_subscriber::layer::SubscriberExt;
     use tracing_subscriber::util::SubscriberInitExt;
@@ -174,85 +202,59 @@ fn init_logging(config: &AppConfig, debug_flag: bool) -> Result<()> {
     let log_level = if debug_flag {
         "debug"
     } else {
-        &config.logging.level
+        "info"
     };
     
-    // Create file layer if configured
-    if let Some(log_file) = &config.logging.log_file {
-        // Remove existing log file to start fresh
-        if fs::metadata(log_file).is_ok() {
-            if let Err(e) = fs::remove_file(log_file) {
-                eprintln!("Warning: Failed to remove existing log file '{}': {}", log_file, e);
-            }
+    // Create file layer for Windows application
+    let log_file = "voipglot-win.log";
+    
+    // Remove existing log file to start fresh
+    if fs::metadata(log_file).is_ok() {
+        if let Err(e) = fs::remove_file(log_file) {
+            eprintln!("Warning: Failed to remove existing log file '{}': {}", log_file, e);
         }
-        
-        // Initialize with both console and file output
-        let file_appender = tracing_appender::rolling::never("", log_file);
-        let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
-        
-        // Store the guard in the static variable
-        GUARD.set(guard).expect("Failed to set logging guard");
-        
-        let env_filter = EnvFilter::try_from_default_env()
-            .unwrap_or_else(|_| EnvFilter::new(log_level));
-        
-        tracing_subscriber::registry()
-            .with(env_filter)
-            .with(fmt::layer().with_ansi(false))
-            .with(fmt::layer().with_ansi(false).with_writer(non_blocking))
-            .init();
-        
-        info!("Logging initialized with console and file output: {}", log_file);
-    } else {
-        // Console only
-        let env_filter = EnvFilter::try_from_default_env()
-            .unwrap_or_else(|_| EnvFilter::new(log_level));
-        
-        tracing_subscriber::registry()
-            .with(env_filter)
-            .with(fmt::layer().with_ansi(false))
-            .init();
-        
-        info!("Logging initialized with console output only");
     }
+    
+    // Initialize with both console and file output
+    let file_appender = tracing_appender::rolling::never("", log_file);
+    let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
+    
+    // Store the guard in the static variable
+    GUARD.set(guard).expect("Failed to set logging guard");
+    
+    let env_filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new(log_level));
+    
+    tracing_subscriber::registry()
+        .with(env_filter)
+        .with(fmt::layer().with_ansi(false))
+        .with(fmt::layer().with_ansi(false).with_writer(non_blocking))
+        .init();
+    
+    info!("Logging initialized with console and file output: {}", log_file);
+    info!("Debug mode: {}", debug_flag);
     
     Ok(())
 }
 
 fn list_audio_devices() -> Result<()> {
-    info!("Available audio devices:");
+    use voipglot_core::audio;
     
-    let host = cpal::default_host();
+    info!("Listing available audio devices...");
     
     // List input devices
-    info!("Input devices:");
-    for device in host.input_devices()? {
-        let name = device.name().unwrap_or_else(|_| "Unknown".to_string());
-        info!("  - {}", name);
-        
-        if let Ok(configs) = device.supported_input_configs() {
-            for config in configs {
-                info!("    {}Hz, {} channels, {:?}", 
-                      config.max_sample_rate().0, 
-                      config.channels(), 
-                      config.sample_format());
-            }
+    if let Ok(devices) = audio::list_input_devices() {
+        info!("Input devices:");
+        for device in devices {
+            info!("  - {}", device.name);
         }
     }
     
     // List output devices
-    info!("Output devices:");
-    for device in host.output_devices()? {
-        let name = device.name().unwrap_or_else(|_| "Unknown".to_string());
-        info!("  - {}", name);
-        
-        if let Ok(configs) = device.supported_output_configs() {
-            for config in configs {
-                info!("    {}Hz, {} channels, {:?}", 
-                      config.max_sample_rate().0, 
-                      config.channels(), 
-                      config.sample_format());
-            }
+    if let Ok(devices) = audio::list_output_devices() {
+        info!("Output devices:");
+        for device in devices {
+            info!("  - {}", device.name);
         }
     }
     

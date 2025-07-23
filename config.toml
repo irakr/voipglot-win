@@ -1,5 +1,4 @@
-﻿[audio_input]
-# Audio input configuration (for STT)
+﻿[audio.input]
 input_device = ""
 sample_rate = 16000
 channels = 1
@@ -7,8 +6,7 @@ buffer_size = 1024
 latency_ms = 50
 vb_cable_device = "CABLE Input (VB-Audio Virtual Cable)"
 
-[audio_output]
-# Audio output configuration (for TTS)
+[audio.output]
 output_device = ""
 sample_rate = 48000
 channels = 2
@@ -16,31 +14,23 @@ buffer_size = 2048
 latency_ms = 100
 
 [processing]
-# Audio processing configuration
-silence_threshold = 0.01
 chunk_duration_ms = 100
+silence_threshold = 0.01
 noise_reduction = true
 echo_cancellation = true
-# Audio feedback prevention - pauses STT when TTS is playing to prevent loops
 enable_feedback_prevention = true
-# Additional silence after TTS playback to ensure clean audio separation (milliseconds)
 tts_silence_buffer_ms = 50
-# Maximum number of TTS requests that can be queued (prevents backlog during slow synthesis)
 tts_queue_size = 3
 
 [stt]
-# Speech-to-Text configuration (VOSK)
 provider = "vosk"
-# Models must be downloaded from https://alphacephei.com/vosk/models
-# and then extracted to voipglot-win\models directory.
-model_path = "models/vosk-model-en-in-0.5"
+model_path = "../voipglot-core/models/vosk-model-small-en-us-0.15"
 sample_rate = 16000.0
 enable_partial_results = true
 
 [translation]
-# Translation configuration (CTranslate2)
 provider = "ct2"
-model_path = "models/nllb-200-ct2"
+model_path = "../voipglot-core/models/nllb-200-ct2"
 source_language = "eng_Latn"
 target_language = "eng_Latn"
 num_threads = 4
@@ -49,20 +39,14 @@ max_batch_size = 32
 beam_size = 4
 
 [tts]
-# Text-to-Speech configuration (Coqui TTS)
 provider = "coqui"
-# Model identifier - Coqui TTS will handle caching automatically
-# Local models downloaded during build are used for offline verification only
-# Always use model identifiers (not file paths) for compatibility with Rust bindings
-model_path = "tts_models/en/ljspeech/fast_pitch"
+model_path = "../voipglot-core/models/tts_models/en/ljspeech/fast_pitch"
 voice_speed = 1.0
 voice_pitch = 1.0
 enable_gpu = false
-# Synthesis timeout in seconds (fast_pitch should complete in 1-3 seconds)
 synthesis_timeout_secs = 5
 
 [logging]
-# Logging configuration
 level = "info"
 format = "simple"
 log_file = "voipglot.log"

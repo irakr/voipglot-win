@@ -1,21 +1,27 @@
 # VoipGlot Windows
 
-Real-time audio translation for Windows gaming and VOIP applications using offline AI models.
+Real-time audio translation for Windows gaming and VOIP applications using the VoipGlot Core library.
 
 ## Features
 
+- **Cross-platform Core**: Uses voipglot-core library for audio processing and translation
 - **Speech-to-Text (STT)**: Real-time speech recognition using VOSK
 - **Translation**: Text translation using CTranslate2 with NLLB-200 model
 - **Text-to-Speech (TTS)**: Speech synthesis using Coqui TTS
 - **Offline Processing**: All AI processing happens locally, no internet required
 - **Real-time Pipeline**: Low-latency audio processing pipeline
 - **Multi-language Support**: Support for 200+ languages via NLLB-200
+- **Windows Optimized**: Windows-specific audio optimizations and integration
 
 ## Architecture
 
 ```
-Microphone → STT (VOSK) → Translation (CTranslate2) → TTS (Coqui) → Audio Output
+Microphone → voipglot-core → Audio Output
+                ↓
+        [STT → Translation → TTS]
 ```
+
+The Windows application is a thin wrapper around the voipglot-core library, which handles all the AI processing and audio pipeline management.
 
 ## Prerequisites
 
@@ -24,6 +30,7 @@ Microphone → STT (VOSK) → Translation (CTranslate2) → TTS (Coqui) → Audi
 - Visual Studio Build Tools (for native dependencies)
 - Microphone input device
 - Audio output device
+- voipglot-core library (in parent directory)
 
 ## Installation
 
@@ -45,34 +52,15 @@ Download and install Visual Studio Build Tools from Microsoft. Make sure to incl
 - Windows 10/11 SDK
 - CMake tools
 
-### 4. Download AI Models
+### 4. Ensure voipglot-core is Available
 
-The build script can automatically download and manage AI models for you:
+The Windows application depends on the voipglot-core library. Make sure it's available in the parent directory:
 
-#### Automatic Download (Recommended)
-```powershell
-# Download required models only (VOSK for STT)
-.\build.ps1 -DownloadModels
-
-# Download all models (VOSK, CTranslate2, Coqui TTS)
-.\build.ps1 -ForceDownload
 ```
-
-#### Manual Download (Alternative)
-If you prefer to download models manually:
-
-##### VOSK Model (Required for STT)
-1. Download a VOSK model from [https://alphacephei.com/vosk/models](https://alphacephei.com/vosk/models)
-2. Extract to `models/vosk-model-small-en-us-0.15`
-
-##### CTranslate2 Model (Optional for Translation)
-1. Download NLLB-200 model from [https://huggingface.co/facebook/nllb-200-3.3B](https://huggingface.co/facebook/nllb-200-3.3B)
-2. Extract to `models/nllb-200-ct2`
-
-##### Coqui TTS Model (Auto-downloaded)
-- TTS models are automatically downloaded and cached during build or first run
-- Default model: `tts_models/en/ljspeech/fast_pitch` (cached in `models/` directory)
-- No manual download required
+VoipGlot/
+├── voipglot-core/     # Core library (required)
+└── voipglot-win/      # Windows application
+```
 
 ## Building
 
@@ -93,56 +81,68 @@ For clean build:
 .\build.ps1 -Clean
 ```
 
-For downloading required models:
-```powershell
-.\build.ps1 -DownloadModels
-```
-
-For downloading all missing models (including TTS models):
-```powershell
-.\build.ps1 -ForceDownload
-```
-
-Skip clippy for faster builds:
-```powershell
-.\build.ps1 -Fast -NoClippy
-```
-
-Combine options:
-```powershell
-.\build.ps1 -Fast -DownloadModels
-```
-
 ### Manual Build
 
 ```powershell
-# Open Developer PowerShell for VS
-cargo build --release
+# Build release version
+cargo build --release --target x86_64-pc-windows-msvc
+
+# Build fast development version
+cargo build --profile fast-release --target x86_64-pc-windows-msvc
 ```
 
 ## Configuration
 
-Edit `config.toml` to configure the application:
+The application uses `config.toml` for configuration. The configuration structure matches the voipglot-core library:
 
 ```toml
-[audio]
+[audio.input]
+input_device = ""
 sample_rate = 16000
 channels = 1
 buffer_size = 1024
 latency_ms = 50
+vb_cable_device = "CABLE Input (VB-Audio Virtual Cable)"
+
+[audio.output]
+output_device = ""
+sample_rate = 48000
+channels = 2
+buffer_size = 2048
+latency_ms = 100
+
+[processing]
+chunk_duration_ms = 100
 silence_threshold = 0.01
+noise_reduction = true
+echo_cancellation = true
+enable_feedback_prevention = true
+tts_silence_buffer_ms = 50
+tts_queue_size = 3
 
 [stt]
-vosk_model_path = "models/vosk-model-en-us-0.22"
+provider = "vosk"
+model_path = "../voipglot-core/models/vosk-model-en-in-0.5"
+sample_rate = 16000.0
+enable_partial_results = true
 
 [translation]
-ct2_model_path = "models/nllb-200-3.3B"
+provider = "ct2"
+model_path = "../voipglot-core/models/nllb-200-ct2"
 source_language = "eng_Latn"
-target_language = "spa_Latn"
+target_language = "eng_Latn"
+num_threads = 4
+device = "cpu"
+max_batch_size = 32
+beam_size = 4
 
 [tts]
-coqui_model_path = "models/coqui-tts-model"
-speaker_id = 0
+provider = "coqui"
+model_path = "tts_models/en/ljspeech/fast_pitch"
+voice_speed = 1.0
+voice_pitch = 1.0
+enable_gpu = false
+synthesis_timeout_secs = 5
 ```
 
 ## Usage
@@ -150,113 +150,108 @@ speaker_id = 0
 ### Basic Usage
 
 ```powershell
-# Run the application
-.\target\release\voipglot-win.exe
+# Run with default configuration
+.\target\x86_64-pc-windows-msvc\release\voipglot-win.exe
+
+# Run with custom configuration
+.\target\x86_64-pc-windows-msvc\release\voipglot-win.exe -c my_config.toml
+
+# Run with debug logging
+.\target\x86_64-pc-windows-msvc\release\voipglot-win.exe --debug
+
+# List available audio devices
+.\target\x86_64-pc-windows-msvc\release\voipglot-win.exe --list-devices
 ```
 
 ### Command Line Options
 
-```powershell
-# List available audio devices
-.\target\release\voipglot-win.exe --list-devices
+- `-c, --config <path>`: Configuration file path (default: config.toml)
+- `--debug`: Enable debug logging
+- `--list-devices`: List available audio input/output devices
+- `--source-lang <lang>`: Source language code (e.g., "en", "fr", "de")
+- `--target-lang <lang>`: Target language code (e.g., "en", "fr", "de")
+- `--sample-rate <rate>`: Audio sample rate in Hz (default: 16000)
+- `--channels <count>`: Audio channels (1 for mono, 2 for stereo, default: 1)
+- `--buffer-size <size>`: Audio buffer size in samples (default: 1024)
+- `--latency-ms <ms>`: Target latency in milliseconds (default: 10)
+- `--silence-threshold <value>`: Silence threshold for voice detection (default: 0.01)
+- `--chunk-duration-ms <ms>`: Audio chunk duration in milliseconds (default: 1000)
 
-# Enable debug logging
-.\target\release\voipglot-win.exe --debug
+## What voipglot-win Does NOT Handle
 
-# Specify custom configuration file
-.\target\release\voipglot-win.exe --config my-config.toml
+Since voipglot-win uses the voipglot-core library, it does not need to worry about:
 
-# Override language settings
-.\target\release\voipglot-win.exe --source-lang eng_Latn --target-lang fra_Latn
-```
+### ❌ **AI Model Management**
+- **Model files**: All AI models (VOSK, CTranslate2, Coqui TTS) are managed by voipglot-core
+- **Model downloads**: Model acquisition and setup is handled by voipglot-core
+- **Model updates**: Model versioning and updates are managed centrally
 
-### Testing STT Only
+### ❌ **AI Library Dependencies**
+- **Audio processing libraries**: cpal, symphonia, dasp are handled by voipglot-core
+- **STT libraries**: VOSK bindings and integration are in voipglot-core
+- **Translation libraries**: CTranslate2 integration is in voipglot-core
+- **TTS libraries**: Coqui TTS bindings are in voipglot-core
 
-For testing speech recognition without translation and TTS:
+### ❌ **Core Pipeline Logic**
+- **Audio pipeline**: Audio capture, processing, and playback logic is in voipglot-core
+- **Translation pipeline**: STT → Translation → TTS flow is managed by voipglot-core
+- **Error handling**: Core error handling and recovery is in voipglot-core
 
-1. Make sure you have a VOSK model downloaded
-2. Run the application
-3. Speak into your microphone
-4. Transcribed text will appear in the console and log file
+## What voipglot-win DOES Handle
 
-## Current Status
+### ✅ **Windows-Specific Integration**
+- **Platform-specific audio device management**
+- **Windows user experience and interface**
+- **Windows-specific configuration and settings**
+- **Integration with Windows gaming/VOIP applications**
 
-### ✅ Implemented and Tested
-- **Audio Pipeline**: Complete audio capture, processing, and playback infrastructure
-- **STT Module**: VOSK speech recognition with real-time audio capture
-- **Translation Module**: CTranslate2 integration with NLLB-200 model
-- **TTS Module**: Coqui TTS integration for speech synthesis
-- **Configuration System**: Flexible configuration management
-- **Logging System**: Comprehensive logging with file and console output
+### ✅ **Application-Level Features**
+- **Command-line interface and argument parsing**
+- **Configuration file management**
+- **Logging and debugging for Windows environment**
+- **User interaction and feedback**
 
-### 🚧 In Progress
-- **Performance Optimization**: Fine-tuning the complete pipeline for lower latency
-- **Language Support**: Testing and validation of additional language pairs
-- **Virtual Microphone**: Integration with VB-CABLE for application output
+## Model Management
 
-### 📋 Next Steps
-1. Optimize end-to-end latency in the translation pipeline
-2. Add support for more VOSK language models
-3. Improve audio preprocessing and noise reduction
-4. Enhance virtual microphone integration
-5. Add user interface for language selection and settings
+Models are managed by the voipglot-core library. The Windows application doesn't handle model downloads directly. Models should be available in the paths specified in the configuration file.
+
+### Required Models (Managed by voipglot-core)
+
+- **VOSK Model**: For speech recognition (specified in `[stt].model_path`)
+- **CTranslate2 Model**: For translation (specified in `[translation].model_path`)
+- **Coqui TTS Model**: For speech synthesis (specified in `[tts].model_path`)
 
 ## Troubleshooting
 
-### Build Issues
-- Ensure you're using Developer PowerShell for VS
-- Make sure Visual Studio Build Tools are installed
-- Check that Rust is up to date: `rustup update`
+### Common Issues
 
-### Audio Issues
-- Use `--list-devices` to see available audio devices
-- Check microphone permissions in Windows settings
-- Ensure microphone is set as default input device
+1. **voipglot-core not found**: Ensure the voipglot-core library is in the parent directory
+2. **Audio device issues**: Use `--list-devices` to see available devices
+3. **Model not found**: Check that model paths in config.toml are correct
+4. **Build errors**: Try `.\build.ps1 -Clean` to clean and rebuild
 
-### Model Issues
-- Verify model paths in config.toml
-- Check that models are properly extracted
-- Ensure sufficient disk space for models
+### Logs
+
+The application creates logs in `voipglot-win.log` in the current directory. Enable debug logging with `--debug` for more detailed information.
 
 ## Development
 
 ### Project Structure
+
 ```
 voipglot-win/
 ├── src/
-│   ├── main.rs              # Application entry point
-│   ├── config.rs            # Configuration management
-│   ├── error.rs             # Error handling
-│   ├── audio/               # Audio processing modules
-│   │   ├── mod.rs
-│   │   ├── capture.rs       # Audio capture
-│   │   ├── playback.rs      # Audio playback
-│   │   └── processing.rs    # Audio processing
-│   └── translation/         # AI translation modules
-│       ├── mod.rs
-│       ├── stt.rs           # Speech-to-text (VOSK)
-│       ├── translator_api.rs # Text translation (CTranslate2)
-│       └── tts.rs           # Text-to-speech (Coqui TTS)
-├── tests/                   # Individual component tests
-│   ├── stt-vosk/           # ✅ VOSK speech recognition
-│   ├── translation-ct2/     # ✅ CTranslate2 translation
-│   └── tts-coqui/          # ✅ Coqui TTS synthesis
-├── models/                  # AI model directory
+│   └── main.rs              # Main application entry point
 ├── config.toml              # Configuration file
 ├── build.ps1                # Build script
-└── README.md               # This file
+├── Cargo.toml               # Rust dependencies
+└── README.md                # This file
 ```
 
-### Testing Individual Components
-Each component has been tested individually in the `tests/` directory:
-- `tests/stt-vosk/`: VOSK speech recognition
-- `tests/translation-ct2/`: CTranslate2 translation
-- `tests/tts-coqui/`: Coqui TTS synthesis
+### Adding Features
+
+Since this application uses voipglot-core, new features should be implemented in the core library rather than here. This application focuses on Windows-specific integration and user experience.
 
 ## License
 
-[Add your license information here]
-
-## Contributing
-
-[Add contribution guidelines here] 
+This project is licensed under the MIT License - see the LICENSE file for details. 

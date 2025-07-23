@@ -1,11 +1,9 @@
 # VoipGlot Windows Build Script
-# This script builds the main VoipGlot application using the proven integrated approach
+# This script builds the Windows application using the voipglot-core library
 
 param(
     [switch]$Clean,
     [switch]$Release,
-    [switch]$DownloadModels,
-    [switch]$ForceDownload,
     [switch]$Fast,
     [switch]$NoClippy
 )
@@ -60,165 +58,21 @@ if ($installedComponents -notcontains "clippy") {
 
 Write-Host "" 
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "Checking required models..." -ForegroundColor Cyan
+Write-Host "Checking voipglot-core dependency..." -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 
-# Create models directory if it doesn't exist
-if (-not (Test-Path "models")) {
-    Write-Host "Creating models directory..." -ForegroundColor Yellow
-    New-Item -ItemType Directory -Path "models" | Out-Null
-}
-
-$voskPath = "models/vosk-model-small-en-us-0.15"
-$ct2Path = "models/nllb-200-ct2"
-$coquiPath = "tts_models/en/ljspeech/tacotron2-DDC"
-$allModelsPresent = $true
-
-# Check VOSK model
-if (-not (Test-Path $voskPath)) {
-    Write-Host "VOSK model not found at: $voskPath" -ForegroundColor Red
-    if ($DownloadModels -or $ForceDownload) {
-        Write-Host "Setting up VOSK model using Python script..." -ForegroundColor Yellow
-        try {
-            python scripts/setup-vosk.py
-            if ($LASTEXITCODE -eq 0) {
-                Write-Host "VOSK model setup completed successfully" -ForegroundColor Green
-                $allModelsPresent = $true
-            } else {
-                Write-Host "Error setting up VOSK model" -ForegroundColor Red
-                $allModelsPresent = $false
-            }
-        }
-        catch {
-            Write-Host "Error running VOSK setup script: $_" -ForegroundColor Red
-            Write-Host "Please download manually from: https://alphacephei.com/vosk/models/" -ForegroundColor Yellow
-            Write-Host "Extract to: models/vosk-model-small-en-us-0.15/" -ForegroundColor Yellow
-            $allModelsPresent = $false
-        }
-    } else {
-        Write-Host "Please download from: https://alphacephei.com/vosk/models/" -ForegroundColor Yellow
-        Write-Host "Extract to: models/vosk-model-small-en-us-0.15/" -ForegroundColor Yellow
-        $allModelsPresent = $false
-    }
-} else {
-    Write-Host "VOSK model found: $voskPath" -ForegroundColor Green
-}
-
-# Check CT2 model
-if (-not (Test-Path $ct2Path)) {
-    Write-Host "CT2 model not found at: $ct2Path" -ForegroundColor Red
-    if ($DownloadModels -or $ForceDownload) {
-        Write-Host "Setting up CT2 model using Python script..." -ForegroundColor Yellow
-        try {
-            python scripts/setup-ct2.py
-            if ($LASTEXITCODE -eq 0) {
-                Write-Host "CT2 model setup completed successfully" -ForegroundColor Green
-                $allModelsPresent = $true
-            } else {
-                Write-Host "Error setting up CT2 model" -ForegroundColor Red
-                $allModelsPresent = $false
-            }
-        }
-        catch {
-            Write-Host "Error running CT2 setup script: $_" -ForegroundColor Red
-            Write-Host "Please download the NLLB-200 CT2 model manually:" -ForegroundColor Yellow
-            Write-Host "  1. Visit: https://huggingface.co/facebook/nllb-200-distilled-600M" -ForegroundColor White
-            Write-Host "  2. Convert to CT2 format if needed (see CTranslate2 docs)" -ForegroundColor White
-            Write-Host "  3. Extract to: models/nllb-200-ct2/" -ForegroundColor White
-            $allModelsPresent = $false
-        }
-    } else {
-        Write-Host "Please download the NLLB-200 CT2 model manually:" -ForegroundColor Yellow
-        Write-Host "  1. Visit: https://huggingface.co/facebook/nllb-200-distilled-600M" -ForegroundColor White
-        Write-Host "  2. Convert to CT2 format if needed (see CTranslate2 docs)" -ForegroundColor White
-        Write-Host "  3. Extract to: models/nllb-200-ct2/" -ForegroundColor White
-        $allModelsPresent = $false
-    }
-} else {
-    Write-Host "CT2 model found: $ct2Path" -ForegroundColor Green
-}
-
-# Check Coqui TTS model
-$coquiModelPath = "models/tts_models/en/ljspeech/fast_pitch"
-if (-not (Test-Path $coquiModelPath)) {
-    Write-Host "Coqui TTS model not found at: $coquiModelPath" -ForegroundColor Red
-    if ($DownloadModels -or $ForceDownload) {
-        Write-Host "Setting up Coqui TTS model using Python script..." -ForegroundColor Yellow
-        try {
-            python scripts/setup-coqui.py
-            if ($LASTEXITCODE -eq 0) {
-                Write-Host "Coqui TTS model setup completed successfully" -ForegroundColor Green
-                $allModelsPresent = $true
-            } else {
-                Write-Host "Error setting up Coqui TTS model" -ForegroundColor Red
-                $allModelsPresent = $false
-            }
-        }
-        catch {
-            Write-Host "Error running Coqui TTS setup script: $_" -ForegroundColor Red
-            Write-Host "Models will be downloaded automatically on first use" -ForegroundColor Yellow
-            # Don't fail build for TTS models - they can be downloaded at runtime
-        }
-    } else {
-        Write-Host "Coqui TTS model will be downloaded automatically on first use" -ForegroundColor Yellow
-    }
-} else {
-    Write-Host "Coqui TTS model found: $coquiModelPath" -ForegroundColor Green
-}
-
-
-if (-not $allModelsPresent) {
-    Write-Host "" 
-    Write-Host "Critical: One or more required models are missing. Build cannot continue." -ForegroundColor Red
-    if ($DownloadModels -or $ForceDownload) {
-        Write-Host "Use -DownloadModels flag to attempt automatic download of missing models." -ForegroundColor Yellow
-    }
+# Check if voipglot-core exists
+if (-not (Test-Path "../voipglot-core")) {
+    Write-Host "Error: voipglot-core library not found at ../voipglot-core" -ForegroundColor Red
+    Write-Host "Please ensure voipglot-core is available in the parent directory" -ForegroundColor Yellow
     exit 1
 }
 
-Write-Host "" 
-Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "Setting up VOSK environment..." -ForegroundColor Cyan
-Write-Host "========================================" -ForegroundColor Cyan
-
-# Setup VOSK environment variables (similar to test build script)
-$voskLibPath = "C:\vosk"
-if (Test-Path $voskLibPath) {
-    Write-Host "Setting VOSK environment variables..." -ForegroundColor Yellow
-    $env:LIBRARY_PATH = $voskLibPath
-    $env:VOSK_LIB_PATH = $voskLibPath
-    $env:INCLUDE_PATH = $voskLibPath
-    
-    # Add VOSK to PATH if not already there
-    if ($env:PATH -notlike "*$voskLibPath*") {
-        $env:PATH += ";$voskLibPath"
-    }
-    
-    Write-Host "VOSK environment variables set:" -ForegroundColor Green
-    Write-Host "  LIBRARY_PATH: $env:LIBRARY_PATH" -ForegroundColor Cyan
-    Write-Host "  VOSK_LIB_PATH: $env:VOSK_LIB_PATH" -ForegroundColor Cyan
-    Write-Host "  INCLUDE_PATH: $env:INCLUDE_PATH" -ForegroundColor Cyan
-    
-    # Verify libvosk.lib exists
-    if (Test-Path "$voskLibPath\libvosk.lib") {
-        Write-Host "  libvosk.lib found: $voskLibPath\libvosk.lib" -ForegroundColor Green
-    } else {
-        Write-Host "  Warning: libvosk.lib not found at $voskLibPath\libvosk.lib" -ForegroundColor Yellow
-        Write-Host "  Please ensure VOSK is properly installed at: $voskLibPath" -ForegroundColor Yellow
-    }
-} else {
-    Write-Host "Warning: VOSK directory not found at: $voskLibPath" -ForegroundColor Yellow
-    Write-Host "Please ensure VOSK is installed or the path is correct" -ForegroundColor Yellow
-}
-
-# Set Rust flags for static runtime (like CT2 test build script)
-Write-Host "Setting Rust flags for static runtime..." -ForegroundColor Yellow
-$env:RUSTFLAGS = "-C target-feature=+crt-static"
-Write-Host "RUSTFLAGS set to: $env:RUSTFLAGS" -ForegroundColor Green
+Write-Host "voipglot-core library found" -ForegroundColor Green
 
 Write-Host "" 
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "Building VoipGlot..." -ForegroundColor Cyan
+Write-Host "Building VoipGlot Windows..." -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 
 # Build options
@@ -245,7 +99,7 @@ if ($Fast) {
     Write-Host "  - Reduced optimization level (still good performance)" -ForegroundColor Gray
 }
 
-# Build the release version first (this caches dependencies)
+# Build the application
 if ($fastBuild) {
     Write-Host "Building fast release version..." -ForegroundColor Yellow
     cargo build --profile fast-release --target x86_64-pc-windows-msvc
@@ -304,15 +158,11 @@ if (Test-Path "config.toml") {
 }
 
 Write-Host ""
-Write-Host "Available Models:" -ForegroundColor Green
-Write-Host "================" -ForegroundColor Green
-if (Test-Path $voskPath) {
-    Write-Host "✅ VOSK Speech Recognition" -ForegroundColor White
-}
-if (Test-Path $ct2Path) {
-    Write-Host "✅ CTranslate2 Translation" -ForegroundColor White
-}
-Write-Host "✅ Coqui TTS (auto-download)" -ForegroundColor White
+Write-Host "VoipGlot Windows Application:" -ForegroundColor Green
+Write-Host "=============================" -ForegroundColor Green
+Write-Host "✅ Built successfully using voipglot-core library" -ForegroundColor White
+Write-Host "✅ Audio processing and translation handled by core library" -ForegroundColor White
+Write-Host "✅ Windows-specific optimizations applied" -ForegroundColor White
 
 Write-Host ""
 Write-Host "To run the application:" -ForegroundColor Yellow
@@ -324,19 +174,7 @@ Write-Host "- Fast development builds: .\build.ps1 -Fast" -ForegroundColor White
 Write-Host "- Skip clippy for speed: .\build.ps1 -Fast -NoClippy" -ForegroundColor White
 Write-Host "- Production builds: .\build.ps1 (default, optimized)" -ForegroundColor White
 Write-Host "- Clean when needed: .\build.ps1 -Clean" -ForegroundColor White
-Write-Host "- Download models: .\build.ps1 -DownloadModels" -ForegroundColor White
-Write-Host "- Force download all: .\build.ps1 -ForceDownload" -ForegroundColor White
 Write-Host "- Dependencies are cached for faster subsequent builds" -ForegroundColor White
-
-Write-Host ""
-Write-Host "STT Testing:" -ForegroundColor Yellow
-Write-Host "============" -ForegroundColor Yellow
-if (Test-Path $voskPath) {
-    Write-Host "✅ STT ready: VOSK model is available" -ForegroundColor Green
-    Write-Host "Speak into your microphone to test speech recognition" -ForegroundColor White
-} else {
-    Write-Host "❌ STT not ready: VOSK model missing" -ForegroundColor Red
-}
 
 Write-Host ""
 Write-Host "Configuration:" -ForegroundColor Yellow
@@ -351,7 +189,7 @@ if (Test-Path "config.toml") {
 
 Write-Host ""
 Write-Host "Remember to:" -ForegroundColor Yellow
-Write-Host "1. Models are automatically managed by the build script" -ForegroundColor White
+Write-Host "1. Models are managed by voipglot-core library" -ForegroundColor White
 Write-Host "2. Install VB-CABLE Virtual Audio Device if needed" -ForegroundColor White
 Write-Host "3. Your config.toml file is preserved and not overwritten" -ForegroundColor White
 Write-Host "" 
