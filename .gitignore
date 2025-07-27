@@ -3,6 +3,9 @@
 **/*.rs.bk
 *.pdb
 
+# voipglot-core distribution package
+/build-voipglot-core/
+
 # Cargo
 Cargo.lock
 

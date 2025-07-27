@@ -30,7 +30,7 @@ The Windows application is a thin wrapper around the voipglot-core library, whic
 - Visual Studio Build Tools (for native dependencies)
 - Microphone input device
 - Audio output device
-- voipglot-core library (in parent directory)
+- voipglot-core distribution package (ZIP file)
 
 ## Installation
 
@@ -52,24 +52,36 @@ Download and install Visual Studio Build Tools from Microsoft. Make sure to incl
 - Windows 10/11 SDK
 - CMake tools
 
-### 4. Ensure voipglot-core is Available
+### 4. Download voipglot-core Package
 
-The Windows application depends on the voipglot-core library. Make sure it's available in the parent directory:
+Download the voipglot-core distribution package (ZIP file) from the releases page or build it yourself using the voipglot-core project.
 
-```
-VoipGlot/
-├── voipglot-core/     # Core library (required)
-└── voipglot-win/      # Windows application
-```
+The package contains:
+- Pre-built voipglot-core library
+- Native dependencies (VOSK, etc.)
+- AI models for speech recognition and translation
+- Setup scripts for environment configuration
 
 ## Building
 
 ### Using the Build Script (Recommended)
 
-```powershell
-# Open Developer PowerShell for VS
-.\build.ps1
-```
+1. **Set the package path environment variable:**
+   ```powershell
+   $env:LIBVOIPGLOT_CORE_PKG = "path/to/voipglot-core-release.zip"
+   ```
+
+2. **Run the build script:**
+   ```powershell
+   # Open Developer PowerShell for VS
+   .\build.ps1
+   ```
+
+The build script will automatically:
+- Extract the voipglot-core package
+- Set up all required environment variables
+- Link against the pre-built library and native dependencies
+- Copy models and native libraries to the target directory
 
 For fast development builds:
 ```powershell
