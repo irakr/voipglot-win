@@ -3,6 +3,9 @@
 **/*.rs.bk
 *.pdb
 
+# voipglot-core distribution package
+/build-voipglot-core/
+
 # Cargo
 Cargo.lock
 
@@ -35,3 +38,6 @@ config.local.toml
 # Temporary files
 *.tmp
 *.temp
+
+# AI model files used by STT, Translator and TTS.
+/models/
