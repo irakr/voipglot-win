@@ -1,9 +1,11 @@
 # VoipGlot Windows
 
-Real-time audio translation for Windows gaming and VOIP applications using the VoipGlot Core library.
+Real-time audio translation for Windows gaming and VOIP applications using the VoipGlot Core library. Features both a modern GUI interface and command-line interface.
 
 ## Features
 
+- **Modern GUI Interface**: Beautiful Tauri-based desktop application with real-time audio visualization
+- **Command-Line Interface**: Traditional CLI for automation and scripting
 - **Cross-platform Core**: Uses voipglot-core library for audio processing and translation
 - **Speech-to-Text (STT)**: Real-time speech recognition using VOSK
 - **Translation**: Text translation using CTranslate2 with NLLB-200 model
@@ -12,6 +14,8 @@ Real-time audio translation for Windows gaming and VOIP applications using the V
 - **Real-time Pipeline**: Low-latency audio processing pipeline
 - **Multi-language Support**: Support for 200+ languages via NLLB-200
 - **Windows Optimized**: Windows-specific audio optimizations and integration
+- **Audio Device Management**: Easy selection of input/output audio devices
+- **Real-time Audio Visualization**: Live microphone frequency display
 
 ## Architecture
 
@@ -21,7 +25,7 @@ Microphone → voipglot-core → Audio Output
         [STT → Translation → TTS]
 ```
 
-The Windows application is a thin wrapper around the voipglot-core library, which handles all the AI processing and audio pipeline management.
+The Windows application provides both a modern GUI interface and CLI wrapper around the voipglot-core library, which handles all the AI processing and audio pipeline management.
 
 ## Prerequisites
 
@@ -82,26 +86,93 @@ The build script will automatically:
 - Set up all required environment variables
 - Link against the pre-built library and native dependencies
 - Copy models and native libraries to the target directory
+- Build both CLI and GUI versions
 
-For fast development builds:
+### Build Modes
+
 ```powershell
+# Full build (CLI + GUI) - Default
+.\build.ps1
+
+# GUI development mode (with hot reload)
+.\build.ps1 -TauriDev
+
+# CLI only build
+.\build.ps1 -CliOnly
+
+# GUI only build
+.\build.ps1 -TauriOnly
+
+# Fast development build
 .\build.ps1 -Fast
-```
 
-For clean build:
-```powershell
+# Clean build
 .\build.ps1 -Clean
 ```
 
 ### Manual Build
 
 ```powershell
-# Build release version
+# Build CLI release version
 cargo build --release --target x86_64-pc-windows-msvc
+
+# Build GUI release version
+cargo tauri build
+
+# Build GUI development version
+cargo tauri dev
 
 # Build fast development version
 cargo build --profile fast-release --target x86_64-pc-windows-msvc
 ```
+
+## Usage
+
+### GUI Interface (Recommended)
+
+The modern GUI provides an intuitive interface for real-time audio translation:
+
+1. **Launch the application** - The GUI will open automatically
+2. **Configure audio devices** - Select your input and output devices
+3. **Choose languages** - Set source and target languages
+4. **Start processing** - Click the microphone button to begin real-time translation
+
+**Features:**
+- Real-time audio frequency visualization
+- Easy audio device selection
+- Language selection with 200+ supported languages
+- Modern glassmorphism design
+- Settings and help access
+
+### Command Line Interface
+
+```powershell
+# Run CLI with default configuration
+.\target\x86_64-pc-windows-msvc\release\voipglot-win.exe
+
+# Run CLI with custom configuration
+.\target\x86_64-pc-windows-msvc\release\voipglot-win.exe -c my_config.toml
+
+# Run CLI with debug logging
+.\target\x86_64-pc-windows-msvc\release\voipglot-win.exe --debug
+
+# List available audio devices
+.\target\x86_64-pc-windows-msvc\release\voipglot-win.exe --list-devices
+```
+
+### Command Line Options
+
+- `-c, --config <path>`: Configuration file path (default: config.toml)
+- `--debug`: Enable debug logging
+- `--list-devices`: List available audio input/output devices
+- `--source-lang <lang>`: Source language code (e.g., "en", "fr", "de")
+- `--target-lang <lang>`: Target language code (e.g., "en", "fr", "de")
+- `--sample-rate <rate>`: Audio sample rate in Hz (default: 16000)
+- `--channels <count>`: Audio channels (1 for mono, 2 for stereo, default: 1)
+- `--buffer-size <size>`: Audio buffer size in samples (default: 1024)
+- `--latency-ms <ms>`: Target latency in milliseconds (default: 10)
+- `--silence-threshold <value>`: Silence threshold for voice detection (default: 0.01)
+- `--chunk-duration-ms <ms>`: Audio chunk duration in milliseconds (default: 1000)
 
 ## Configuration
 
@@ -157,38 +228,6 @@ enable_gpu = false
 synthesis_timeout_secs = 5
 ```
 
-## Usage
-
-### Basic Usage
-
-```powershell
-# Run with default configuration
-.\target\x86_64-pc-windows-msvc\release\voipglot-win.exe
-
-# Run with custom configuration
-.\target\x86_64-pc-windows-msvc\release\voipglot-win.exe -c my_config.toml
-
-# Run with debug logging
-.\target\x86_64-pc-windows-msvc\release\voipglot-win.exe --debug
-
-# List available audio devices
-.\target\x86_64-pc-windows-msvc\release\voipglot-win.exe --list-devices
-```
-
-### Command Line Options
-
-- `-c, --config <path>`: Configuration file path (default: config.toml)
-- `--debug`: Enable debug logging
-- `--list-devices`: List available audio input/output devices
-- `--source-lang <lang>`: Source language code (e.g., "en", "fr", "de")
-- `--target-lang <lang>`: Target language code (e.g., "en", "fr", "de")
-- `--sample-rate <rate>`: Audio sample rate in Hz (default: 16000)
-- `--channels <count>`: Audio channels (1 for mono, 2 for stereo, default: 1)
-- `--buffer-size <size>`: Audio buffer size in samples (default: 1024)
-- `--latency-ms <ms>`: Target latency in milliseconds (default: 10)
-- `--silence-threshold <value>`: Silence threshold for voice detection (default: 0.01)
-- `--chunk-duration-ms <ms>`: Audio chunk duration in milliseconds (default: 1000)
-
 ## What voipglot-win Does NOT Handle
 
 Since voipglot-win uses the voipglot-core library, it does not need to worry about:
@@ -218,10 +257,12 @@ Since voipglot-win uses the voipglot-core library, it does not need to worry abo
 - **Integration with Windows gaming/VOIP applications**
 
 ### ✅ **Application-Level Features**
+- **Modern GUI interface with Tauri**
 - **Command-line interface and argument parsing**
 - **Configuration file management**
 - **Logging and debugging for Windows environment**
 - **User interaction and feedback**
+- **Real-time audio visualization**
 
 ## Model Management
 
@@ -241,6 +282,7 @@ Models are managed by the voipglot-core library. The Windows application doesn't
 2. **Audio device issues**: Use `--list-devices` to see available devices
 3. **Model not found**: Check that model paths in config.toml are correct
 4. **Build errors**: Try `.\build.ps1 -Clean` to clean and rebuild
+5. **GUI not starting**: Ensure Tauri dependencies are installed with `cargo install tauri-cli --version '^2.0.0' --locked`
 
 ### Logs
 
@@ -253,16 +295,31 @@ The application creates logs in `voipglot-win.log` in the current directory. Ena
 ```
 voipglot-win/
 ├── src/
-│   └── main.rs              # Main application entry point
+│   ├── main.rs              # Tauri application entry point
+│   ├── lib.rs               # Tauri backend library
+│   └── frontend/            # GUI frontend files
+│       ├── index.html       # Main HTML structure
+│       ├── styles.css       # Modern styling
+│       └── main.js          # Frontend JavaScript
 ├── config.toml              # Configuration file
 ├── build.ps1                # Build script
+├── build.rs                 # Tauri build configuration
+├── tauri.conf.json          # Tauri application configuration
 ├── Cargo.toml               # Rust dependencies
 └── README.md                # This file
 ```
 
 ### Adding Features
 
-Since this application uses voipglot-core, new features should be implemented in the core library rather than here. This application focuses on Windows-specific integration and user experience.
+Since this application uses voipglot-core, new AI features should be implemented in the core library rather than here. This application focuses on Windows-specific integration, user experience, and the GUI interface.
+
+### GUI Development
+
+The GUI is built with Tauri 2.0 using:
+- **HTML/CSS/JavaScript** for the frontend
+- **Rust** for the backend with Tauri commands
+- **Modern styling** with glassmorphism effects
+- **Real-time audio visualization**
 
 ## License
 

@@ -1,0 +1,401 @@
+/* Reset and base styles */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    color: #333;
+    overflow-x: hidden;
+}
+
+/* App Container */
+.app-container {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+}
+
+/* Header */
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.5rem 2rem;
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.header-left {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.app-title {
+    font-size: 2rem;
+    font-weight: 700;
+    color: white;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.app-subtitle {
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.8);
+    font-weight: 400;
+}
+
+.header-right {
+    display: flex;
+    gap: 1rem;
+}
+
+/* Buttons */
+.btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 12px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+    backdrop-filter: blur(10px);
+}
+
+.btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.btn-secondary {
+    background: rgba(255, 255, 255, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.25);
+}
+
+/* Main Content */
+.main-content {
+    flex: 1;
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+    max-width: 1200px;
+    margin: 0 auto;
+    width: 100%;
+}
+
+/* Configuration Sections */
+.config-section {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(15px);
+    border-radius: 20px;
+    padding: 2rem;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+.section-title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: white;
+    margin-bottom: 1.5rem;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* Device Configuration */
+.device-config {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+}
+
+.device-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.device-label {
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.device-select {
+    padding: 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    font-size: 0.9rem;
+    backdrop-filter: blur(10px);
+    transition: all 0.3s ease;
+}
+
+.device-select:focus {
+    outline: none;
+    border-color: rgba(255, 255, 255, 0.6);
+    background: rgba(255, 255, 255, 0.15);
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1);
+}
+
+.device-select option {
+    background: #2d3748;
+    color: white;
+}
+
+/* Language Configuration */
+.language-config {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 2rem;
+}
+
+.language-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    min-width: 200px;
+}
+
+.language-label {
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.9);
+    text-align: center;
+}
+
+.language-select {
+    padding: 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    font-size: 0.9rem;
+    backdrop-filter: blur(10px);
+    transition: all 0.3s ease;
+    text-align: center;
+}
+
+.language-select:focus {
+    outline: none;
+    border-color: rgba(255, 255, 255, 0.6);
+    background: rgba(255, 255, 255, 0.15);
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1);
+}
+
+.language-select option {
+    background: #2d3748;
+    color: white;
+}
+
+.language-arrow {
+    color: rgba(255, 255, 255, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Microphone Section */
+.mic-section {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 2rem 0;
+}
+
+.mic-button {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    padding: 2rem 3rem;
+    border: none;
+    border-radius: 50px;
+    background: linear-gradient(135deg, #ff6b6b, #ee5a24);
+    color: white;
+    font-size: 1.2rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 8px 32px rgba(238, 90, 36, 0.4);
+    min-width: 200px;
+}
+
+.mic-button:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 40px rgba(238, 90, 36, 0.6);
+}
+
+.mic-button.active {
+    background: linear-gradient(135deg, #00b894, #00a085);
+    box-shadow: 0 8px 32px rgba(0, 184, 148, 0.4);
+}
+
+.mic-button.active:hover {
+    box-shadow: 0 12px 40px rgba(0, 184, 148, 0.6);
+}
+
+.mic-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 80px;
+    height: 80px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 50%;
+    backdrop-filter: blur(10px);
+}
+
+.mic-text {
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+/* Visualizer Section */
+.visualizer-section {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(15px);
+    border-radius: 20px;
+    padding: 2rem;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+.visualizer-title {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: white;
+    margin-bottom: 1.5rem;
+    text-align: center;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.frequency-visualizer {
+    display: flex;
+    align-items: end;
+    justify-content: center;
+    gap: 4px;
+    height: 120px;
+    padding: 1rem;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 12px;
+    backdrop-filter: blur(10px);
+}
+
+.frequency-bar {
+    width: 8px;
+    background: linear-gradient(to top, #00b894, #00d2ff);
+    border-radius: 4px;
+    transition: height 0.1s ease;
+    min-height: 4px;
+    box-shadow: 0 2px 8px rgba(0, 184, 148, 0.3);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .header {
+        padding: 1rem;
+        flex-direction: column;
+        gap: 1rem;
+    }
+    
+    .app-title {
+        font-size: 1.5rem;
+    }
+    
+    .main-content {
+        padding: 1rem;
+        gap: 1.5rem;
+    }
+    
+    .device-config {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+    
+    .language-config {
+        flex-direction: column;
+        gap: 1rem;
+    }
+    
+    .language-arrow {
+        transform: rotate(90deg);
+    }
+    
+    .mic-button {
+        padding: 1.5rem 2rem;
+        min-width: 150px;
+    }
+    
+    .mic-icon {
+        width: 60px;
+        height: 60px;
+    }
+    
+    .frequency-visualizer {
+        height: 80px;
+        gap: 2px;
+    }
+    
+    .frequency-bar {
+        width: 6px;
+    }
+}
+
+/* Animation for frequency bars */
+@keyframes pulse {
+    0%, 100% {
+        opacity: 0.7;
+    }
+    50% {
+        opacity: 1;
+    }
+}
+
+.frequency-bar {
+    animation: pulse 2s ease-in-out infinite;
+    animation-delay: calc(var(--i, 0) * 0.1s);
+}
+
+/* Smooth transitions for all interactive elements */
+* {
+    transition: all 0.3s ease;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.5);
+} 

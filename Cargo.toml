@@ -5,9 +5,21 @@ edition = "2021"
 authors = ["VoipGlot Team"]
 description = "Real-time audio translation for Windows gaming and VOIP applications"
 
+# Tauri library configuration
+[lib]
+name = "voipglot_win_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
 # No build dependencies needed - using voipglot-core as Cargo dependency
 
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
 [dependencies]
+# Tauri dependencies
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+
 # VoipGlot Core Library
 voipglot-core = { path = "../voipglot-core" }
 
@@ -54,10 +66,6 @@ windows = { version = "=0.56.0", features = [
 
 [dev-dependencies]
 tokio-test = "=0.4.3"
-
-[[bin]]
-name = "voipglot-win"
-path = "src/main.rs"
 
 [profile.fast-release]
 inherits = "release"
