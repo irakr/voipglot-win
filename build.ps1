@@ -192,6 +192,36 @@ if ($missingFiles.Count -gt 0) {
 
 Write-Host "Runtime dependencies verified" -ForegroundColor Green
 
+# Set up VOSK environment variables for linking
+Write-Host "" 
+Write-Host "========================================" -ForegroundColor Cyan
+Write-Host "Setting up VOSK environment for linking..." -ForegroundColor Cyan
+Write-Host "========================================" -ForegroundColor Cyan
+
+$voskLibPath = "$buildDir\native-libs"
+if (Test-Path "$voskLibPath\libvosk.lib") {
+    Write-Host "Found VOSK library at: $voskLibPath\libvosk.lib" -ForegroundColor Green
+    
+    # Set VOSK environment variables for linking
+    $env:LIBRARY_PATH = $voskLibPath
+    $env:VOSK_LIB_PATH = $voskLibPath
+    $env:INCLUDE_PATH = $voskLibPath
+    
+    # Add VOSK to PATH if not already there
+    if ($env:PATH -notlike "*$voskLibPath*") {
+        $env:PATH += ";$voskLibPath"
+    }
+    
+    Write-Host "VOSK environment variables set:" -ForegroundColor Green
+    Write-Host "  LIBRARY_PATH: $env:LIBRARY_PATH" -ForegroundColor Cyan
+    Write-Host "  VOSK_LIB_PATH: $env:VOSK_LIB_PATH" -ForegroundColor Cyan
+    Write-Host "  INCLUDE_PATH: $env:INCLUDE_PATH" -ForegroundColor Cyan
+    Write-Host "  libvosk.lib found: $voskLibPath\libvosk.lib" -ForegroundColor Green
+} else {
+    Write-Host "Warning: VOSK library not found at $voskLibPath\libvosk.lib" -ForegroundColor Yellow
+    Write-Host "This may cause linking errors if voipglot-core requires VOSK" -ForegroundColor Yellow
+}
+
 # Check if Rust is installed
 try {
     $rustVersion = rustc --version 2>$null
