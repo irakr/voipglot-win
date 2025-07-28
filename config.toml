@@ -24,13 +24,13 @@ tts_queue_size = 3
 
 [stt]
 provider = "vosk"
-model_path = "../voipglot-core/models/vosk-model-small-en-us-0.15"
+model_path = "./build-voipglot-core/models/vosk-model-en-us-0.22"
 sample_rate = 16000.0
 enable_partial_results = true
 
 [translation]
 provider = "ct2"
-model_path = "../voipglot-core/models/nllb-200-ct2"
+model_path = "./build-voipglot-core/models/nllb-200-ct2"
 source_language = "eng_Latn"
 target_language = "eng_Latn"
 num_threads = 4
@@ -40,7 +40,7 @@ beam_size = 4
 
 [tts]
 provider = "coqui"
-model_path = "../voipglot-core/models/tts_models/en/ljspeech/fast_pitch"
+model_path = "./build-voipglot-core/models/tts_models/en/ljspeech/fast_pitch"
 voice_speed = 1.0
 voice_pitch = 1.0
 enable_gpu = false
