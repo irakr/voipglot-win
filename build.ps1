@@ -85,8 +85,12 @@ switch ($operationMode) {
         Write-Host "Cleaning Cargo build artifacts..." -ForegroundColor Yellow
         cargo clean
         
-        # Note: No longer using voipglot-core build directory
-        # Using Cargo dependency instead
+        # Clean extracted voipglot-core package directory
+        if (Test-Path $buildDir) {
+            Write-Host "Cleaning extracted voipglot-core package directory..." -ForegroundColor Yellow
+            Remove-Item $buildDir -Recurse -Force
+            Write-Host "Extracted package directory cleaned" -ForegroundColor Green
+        }
         
         # Clean .cargo config (will be recreated)
         if (Test-Path ".cargo\config.toml") {
@@ -269,8 +273,8 @@ if ($operationMode -eq "package") {
         # Clean Cargo build artifacts
         cargo clean
         
-        # Note: No longer using voipglot-core build directory
-        # Using Cargo dependency instead
+        # Note: voipglot-core build directory is used for runtime dependencies
+        # (models, native libraries) - cleaned separately above
         
         # Clean .cargo config (will be recreated)
         if (Test-Path ".cargo\config.toml") {
