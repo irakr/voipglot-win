@@ -41,3 +41,44 @@ config.local.toml
 
 # AI model files used by STT, Translator and TTS.
 /models/
+
+# Tauri build artifacts
+src-tauri/target/
+src-tauri/Cargo.lock
+
+# Tauri bundle outputs
+src-tauri/target/release/bundle/
+src-tauri/target/debug/bundle/
+
+# Tauri development artifacts
+.tauri/
+
+# Node.js dependencies
+node_modules/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Build outputs
+dist/
+build/
+
+# Frontend build tools
+.npm/
+.yarn/
+
+# Tauri icon files (if not committed)
+icons/*.ico
+icons/*.icns
+icons/*.png
+!icons/icon.ico
+
+# Tauri configuration overrides
+tauri.conf.local.json
+
+# Development certificates
+*.p12
+*.pfx
+
+# Tauri updater files
+updater.json

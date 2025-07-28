@@ -117,10 +117,10 @@ The build script will automatically:
 cargo build --release --target x86_64-pc-windows-msvc
 
 # Build GUI release version
-cargo tauri build
+cargo tauri build --project src-tauri
 
 # Build GUI development version
-cargo tauri dev
+cargo tauri dev --project src-tauri
 
 # Build fast development version
 cargo build --profile fast-release --target x86_64-pc-windows-msvc
@@ -148,16 +148,16 @@ The modern GUI provides an intuitive interface for real-time audio translation:
 
 ```powershell
 # Run CLI with default configuration
-.\target\x86_64-pc-windows-msvc\release\voipglot-win.exe
+.\target\release\voipglot-win.exe
 
 # Run CLI with custom configuration
-.\target\x86_64-pc-windows-msvc\release\voipglot-win.exe -c my_config.toml
+.\target\release\voipglot-win.exe -c my_config.toml
 
 # Run CLI with debug logging
-.\target\x86_64-pc-windows-msvc\release\voipglot-win.exe --debug
+.\target\release\voipglot-win.exe --debug
 
 # List available audio devices
-.\target\x86_64-pc-windows-msvc\release\voipglot-win.exe --list-devices
+.\target\release\voipglot-win.exe --list-devices
 ```
 
 ### Command Line Options
@@ -294,20 +294,33 @@ The application creates logs in `voipglot-win.log` in the current directory. Ena
 
 ```
 voipglot-win/
-├── src/
-│   ├── main.rs              # Tauri application entry point
-│   ├── lib.rs               # Tauri backend library
-│   └── frontend/            # GUI frontend files
-│       ├── index.html       # Main HTML structure
-│       ├── styles.css       # Modern styling
-│       └── main.js          # Frontend JavaScript
-├── config.toml              # Configuration file
-├── build.ps1                # Build script
-├── build.rs                 # Tauri build configuration
-├── tauri.conf.json          # Tauri application configuration
-├── Cargo.toml               # Rust dependencies
-└── README.md                # This file
+├── src-tauri/               # Tauri backend (Rust)
+│   ├── src/
+│   │   ├── main.rs          # Tauri application entry point
+│   │   └── lib.rs           # Tauri backend library
+│   ├── Cargo.toml           # Rust dependencies
+│   ├── tauri.conf.json      # Tauri application configuration
+│   └── build.rs             # Tauri build configuration
+├── src/                     # Frontend source (HTML/TS/CSS/etc.)
+│   ├── index.html           # Frontend entry point
+│   ├── main.ts              # TypeScript frontend logic
+│   └── styles.css           # Frontend styling
+├── package.json             # Frontend dependencies
+├── tsconfig.json            # TypeScript configuration
+├── vite.config.ts           # Vite build configuration
+├── icons/
+├── config.toml
+├── build.ps1
+├── Cargo.toml               # Workspace configuration
+└── README.md
 ```
+
+**Note:**
+- All frontend code (HTML, TS, CSS, etc.) is in the outermost `src/` directory.
+- Tauri config (`tauri.conf.json`) has `"frontendDist": "../dist"` (points to Vite build output).
+- Frontend uses TypeScript with Vite build system.
+- Vite root is set to `src/` and builds to `dist/` (project root).
+- In `index.html`, reference scripts as `main.ts` (Vite handles the build).
 
 ### Adding Features
 
@@ -316,10 +329,31 @@ Since this application uses voipglot-core, new AI features should be implemented
 ### GUI Development
 
 The GUI is built with Tauri 2.0 using:
-- **HTML/CSS/JavaScript** for the frontend
+- **HTML/CSS/TypeScript** for the frontend (all code in `src/`)
 - **Rust** for the backend with Tauri commands
 - **Modern styling** with glassmorphism effects
 - **Real-time audio visualization**
+
+#### Frontend Development
+
+The frontend uses TypeScript with Vite for fast development:
+
+```bash
+# Install frontend dependencies
+npm install
+
+# Start development server
+npm run dev
+
+# Build for production
+npm run build
+```
+
+The frontend structure follows modern web development practices with:
+- **TypeScript** for type safety
+- **Vite** for fast build times and hot reload
+- **ES modules** for modern JavaScript features
+- **Tauri APIs** for native desktop integration
 
 ## License
 

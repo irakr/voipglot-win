@@ -1,23 +1,34 @@
-// VoipGlot Frontend JavaScript
+// VoipGlot Frontend TypeScript
 // This file contains the frontend logic for the VoipGlot GUI
 
 // Import Tauri APIs
 const { invoke } = window.__TAURI__.tauri;
 
+// Type definitions
+interface AudioDevices {
+  input: string[];
+  output: string[];
+}
+
+interface Language {
+  code: string;
+  name: string;
+}
+
 // DOM Elements
-const micButton = document.getElementById('mic-button');
-const micText = document.querySelector('.mic-text');
-const settingsBtn = document.getElementById('settings-btn');
-const helpBtn = document.getElementById('help-btn');
-const inputDeviceSelect = document.getElementById('input-device');
-const outputDeviceSelect = document.getElementById('output-device');
-const sourceLanguageSelect = document.getElementById('source-language');
-const targetLanguageSelect = document.getElementById('target-language');
-const frequencyVisualizer = document.getElementById('frequency-visualizer');
+const micButton = document.getElementById('mic-button') as HTMLButtonElement;
+const micText = document.querySelector('.mic-text') as HTMLElement;
+const settingsBtn = document.getElementById('settings-btn') as HTMLButtonElement;
+const helpBtn = document.getElementById('help-btn') as HTMLButtonElement;
+const inputDeviceSelect = document.getElementById('input-device') as HTMLSelectElement;
+const outputDeviceSelect = document.getElementById('output-device') as HTMLSelectElement;
+const sourceLanguageSelect = document.getElementById('source-language') as HTMLSelectElement;
+const targetLanguageSelect = document.getElementById('target-language') as HTMLSelectElement;
+const frequencyVisualizer = document.getElementById('frequency-visualizer') as HTMLElement;
 
 // State
-let isMicActive = false;
-let visualizerInterval = null;
+let isMicActive: boolean = false;
+let visualizerInterval: number | null = null;
 
 // Initialize the application
 document.addEventListener('DOMContentLoaded', () => {

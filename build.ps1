@@ -116,6 +116,44 @@ switch ($operationMode) {
             Remove-Item ".cargo\config.toml" -Force
         }
         
+        # Clean frontend dependencies and build artifacts
+        Write-Host "Cleaning frontend dependencies and build artifacts..." -ForegroundColor Yellow
+        
+        # Clean node_modules
+        if (Test-Path "node_modules") {
+            Write-Host "Removing node_modules directory..." -ForegroundColor Yellow
+            Remove-Item "node_modules" -Recurse -Force
+            Write-Host "node_modules cleaned" -ForegroundColor Green
+        }
+        
+        # Clean package-lock.json
+        if (Test-Path "package-lock.json") {
+            Write-Host "Removing package-lock.json..." -ForegroundColor Yellow
+            Remove-Item "package-lock.json" -Force
+            Write-Host "package-lock.json cleaned" -ForegroundColor Green
+        }
+        
+        # Clean Vite build output
+        if (Test-Path "dist") {
+            Write-Host "Removing Vite build output (dist/)..." -ForegroundColor Yellow
+            Remove-Item "dist" -Recurse -Force
+            Write-Host "Vite build output cleaned" -ForegroundColor Green
+        }
+        
+        # Clean Tauri build artifacts
+        if (Test-Path "src-tauri\target") {
+            Write-Host "Removing Tauri build artifacts..." -ForegroundColor Yellow
+            Remove-Item "src-tauri\target" -Recurse -Force
+            Write-Host "Tauri build artifacts cleaned" -ForegroundColor Green
+        }
+        
+        # Clean .tauri directory
+        if (Test-Path ".tauri") {
+            Write-Host "Removing .tauri directory..." -ForegroundColor Yellow
+            Remove-Item ".tauri" -Recurse -Force
+            Write-Host ".tauri directory cleaned" -ForegroundColor Green
+        }
+        
         Write-Host "All build artifacts cleaned successfully" -ForegroundColor Green
         Write-Host "Clean operation completed. Exiting." -ForegroundColor Cyan
         exit 0
@@ -123,6 +161,33 @@ switch ($operationMode) {
     "tauri-dev" {
         Write-Host "Tauri Development mode: Running Tauri GUI in development..." -ForegroundColor Yellow
         Write-Host "This will start the GUI application with hot reloading" -ForegroundColor Cyan
+        
+        # Check if Node.js and npm are installed
+        Write-Host "Checking Node.js and npm installation..." -ForegroundColor Yellow
+        try {
+            $nodeVersion = node --version 2>$null
+            $npmVersion = npm --version 2>$null
+            if ($LASTEXITCODE -ne 0) {
+                throw "Node.js or npm not found"
+            }
+            Write-Host "Node.js found: $nodeVersion" -ForegroundColor Green
+            Write-Host "npm found: $npmVersion" -ForegroundColor Green
+        } catch {
+            Write-Host "Error: Node.js or npm is not installed" -ForegroundColor Red
+            Write-Host "Please install Node.js from https://nodejs.org/ (includes npm)" -ForegroundColor Yellow
+            Write-Host "After installation, restart PowerShell and run the build script again" -ForegroundColor Yellow
+            exit 1
+        }
+
+        # Install frontend dependencies
+        Write-Host "Installing frontend dependencies..." -ForegroundColor Yellow
+        npm install
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "Error: Failed to install frontend dependencies" -ForegroundColor Red
+            Write-Host "Try running 'npm install' manually to see detailed error messages" -ForegroundColor Yellow
+            exit 1
+        }
+        Write-Host "Frontend dependencies installed successfully" -ForegroundColor Green
         
         # Check if Tauri CLI is installed
         try {
@@ -142,7 +207,9 @@ switch ($operationMode) {
         }
         
         Write-Host "Starting Tauri development server..." -ForegroundColor Yellow
+        Push-Location src-tauri
         cargo tauri dev
+        Pop-Location
         exit $LASTEXITCODE
     }
     "cli-only" {
@@ -151,6 +218,33 @@ switch ($operationMode) {
     }
     "tauri-only" {
         Write-Host "Tauri Only mode: Building Tauri GUI only (skip CLI)..." -ForegroundColor Yellow
+        
+        # Check if Node.js and npm are installed
+        Write-Host "Checking Node.js and npm installation..." -ForegroundColor Yellow
+        try {
+            $nodeVersion = node --version 2>$null
+            $npmVersion = npm --version 2>$null
+            if ($LASTEXITCODE -ne 0) {
+                throw "Node.js or npm not found"
+            }
+            Write-Host "Node.js found: $nodeVersion" -ForegroundColor Green
+            Write-Host "npm found: $npmVersion" -ForegroundColor Green
+        } catch {
+            Write-Host "Error: Node.js or npm is not installed" -ForegroundColor Red
+            Write-Host "Please install Node.js from https://nodejs.org/ (includes npm)" -ForegroundColor Yellow
+            Write-Host "After installation, restart PowerShell and run the build script again" -ForegroundColor Yellow
+            exit 1
+        }
+
+        # Install frontend dependencies
+        Write-Host "Installing frontend dependencies..." -ForegroundColor Yellow
+        npm install
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "Error: Failed to install frontend dependencies" -ForegroundColor Red
+            Write-Host "Try running 'npm install' manually to see detailed error messages" -ForegroundColor Yellow
+            exit 1
+        }
+        Write-Host "Frontend dependencies installed successfully" -ForegroundColor Green
         
         # Check if Tauri CLI is installed
         try {
@@ -170,10 +264,13 @@ switch ($operationMode) {
         }
         
         Write-Host "Building Tauri application..." -ForegroundColor Yellow
+        Push-Location src-tauri
         cargo tauri build
-        if ($LASTEXITCODE -eq 0) {
+        $tauriExitCode = $LASTEXITCODE
+        Pop-Location
+        if ($tauriExitCode -eq 0) {
             Write-Host "Tauri build completed successfully!" -ForegroundColor Green
-            Write-Host "Output files are in: src-tauri/target/release/bundle/" -ForegroundColor Cyan
+            Write-Host "Output files are in: target\release\bundle\" -ForegroundColor Cyan
         } else {
             Write-Host "Error: Tauri build failed!" -ForegroundColor Red
             exit 1
@@ -449,6 +546,33 @@ if ($operationMode -ne "cli-only") {
     Write-Host "Building Tauri GUI Application..." -ForegroundColor Cyan
     Write-Host "========================================" -ForegroundColor Cyan
 
+    # Check if Node.js and npm are installed
+    Write-Host "Checking Node.js and npm installation..." -ForegroundColor Yellow
+    try {
+        $nodeVersion = node --version 2>$null
+        $npmVersion = npm --version 2>$null
+        if ($LASTEXITCODE -ne 0) {
+            throw "Node.js or npm not found"
+        }
+        Write-Host "Node.js found: $nodeVersion" -ForegroundColor Green
+        Write-Host "npm found: $npmVersion" -ForegroundColor Green
+    } catch {
+        Write-Host "Error: Node.js or npm is not installed" -ForegroundColor Red
+        Write-Host "Please install Node.js from https://nodejs.org/ (includes npm)" -ForegroundColor Yellow
+        Write-Host "After installation, restart PowerShell and run the build script again" -ForegroundColor Yellow
+        exit 1
+    }
+
+    # Install frontend dependencies
+    Write-Host "Installing frontend dependencies..." -ForegroundColor Yellow
+    npm install
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "Error: Failed to install frontend dependencies" -ForegroundColor Red
+        Write-Host "Try running 'npm install' manually to see detailed error messages" -ForegroundColor Yellow
+        exit 1
+    }
+    Write-Host "Frontend dependencies installed successfully" -ForegroundColor Green
+
     # Check if Tauri CLI is installed
     try {
         $tauriVersion = cargo tauri --version 2>$null
@@ -467,7 +591,10 @@ if ($operationMode -ne "cli-only") {
     }
 
     Write-Host "Building Tauri GUI application..." -ForegroundColor Yellow
+    Push-Location src-tauri
     cargo tauri build
+    $tauriExitCode = $LASTEXITCODE
+    Pop-Location
     if ($LASTEXITCODE -ne 0) {
         Write-Host "Error: Tauri GUI build failed!" -ForegroundColor Red
         exit 1
@@ -485,10 +612,10 @@ Write-Host ""
 if ($operationMode -ne "tauri-only") {
     # Show CLI executable location based on profile
     if ($fastBuild) {
-        $targetDir = "target\x86_64-pc-windows-msvc\fast-release"
+        $targetDir = "target\fast-release"
         Write-Host "CLI Executable location: $targetDir\voipglot-win.exe" -ForegroundColor Cyan
     } else {
-        $targetDir = "target\x86_64-pc-windows-msvc\release"
+        $targetDir = "target\release"
         Write-Host "CLI Executable location: $targetDir\voipglot-win.exe" -ForegroundColor Cyan
     }
 

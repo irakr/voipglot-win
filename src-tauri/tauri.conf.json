@@ -4,7 +4,9 @@
   "version": "0.1.0",
   "identifier": "com.voipglot.win",
   "build": {
-    "frontendDist": "src/frontend"
+    "frontendDist": "../dist",
+    "beforeBuildCommand": "npm run build",
+    "beforeDevCommand": "npm run dev"
   },
   "app": {
     "withGlobalTauri": true,
@@ -29,7 +31,7 @@
     "active": true,
     "targets": "all",
     "icon": [
-      "icons/icon.ico"
+      "../icons/icon.ico"
     ]
   }
 } 
