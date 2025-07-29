@@ -6,9 +6,13 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use tauri::{App, Manager};
-use voipglot_core::{VoipGlotPipeline, PipelineConfig};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::env;
+use std::path::Path;
+
+// Import voipglot_core
+use voipglot_core::{VoipGlotPipeline, PipelineConfig};
 
 // State management
 pub struct AppState {

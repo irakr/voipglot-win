@@ -76,6 +76,12 @@ icons/*.png
 # Tauri configuration overrides
 tauri.conf.local.json
 
+# Tauri resources (generated during build)
+src-tauri/resources/
+
+# Tauri DLL files (copied to src directory during build)
+src-tauri/*.dll
+
 # Development certificates
 *.p12
 *.pfx

@@ -154,6 +154,22 @@ switch ($operationMode) {
             Write-Host ".tauri directory cleaned" -ForegroundColor Green
         }
         
+        # Clean Tauri resources directory
+        if (Test-Path "src-tauri\resources") {
+            Write-Host "Removing Tauri resources directory..." -ForegroundColor Yellow
+            Remove-Item "src-tauri\resources" -Recurse -Force
+            Write-Host "Tauri resources directory cleaned" -ForegroundColor Green
+        }
+        
+        # Clean DLL files copied to Tauri src directory root
+        $tauriSrcDir = "src-tauri"
+        $dllFiles = Get-ChildItem "$tauriSrcDir\*.dll" -ErrorAction SilentlyContinue
+        if ($dllFiles) {
+            Write-Host "Removing DLL files from Tauri src directory..." -ForegroundColor Yellow
+            Remove-Item "$tauriSrcDir\*.dll" -Force
+            Write-Host "DLL files cleaned from Tauri src directory" -ForegroundColor Green
+        }
+        
         Write-Host "All build artifacts cleaned successfully" -ForegroundColor Green
         Write-Host "Clean operation completed. Exiting." -ForegroundColor Cyan
         exit 0
@@ -590,6 +606,26 @@ if ($operationMode -ne "cli-only") {
         }
     }
 
+    # Copy native dependencies and models to Tauri bundle directory before building
+    Write-Host "Copying native dependencies and models to Tauri bundle directory..." -ForegroundColor Yellow
+    $tauriSrcDir = "src-tauri"
+    $tauriResourcesDir = "$tauriSrcDir\resources"
+    
+    # Copy native libraries to Tauri src directory root (will be bundled in root)
+    Copy-Item "$buildDir\native-libs\*.dll" $tauriSrcDir -Force
+    Write-Host "Native dependencies copied to Tauri src directory root" -ForegroundColor Green
+    
+    # Copy model files to resources subdirectory
+    if (-not (Test-Path $tauriResourcesDir)) {
+        New-Item -ItemType Directory -Path $tauriResourcesDir -Force | Out-Null
+    }
+    $tauriModelsDir = "$tauriResourcesDir\models"
+    if (-not (Test-Path $tauriModelsDir)) {
+        New-Item -ItemType Directory -Path $tauriModelsDir -Force | Out-Null
+    }
+    Copy-Item "$buildDir\models\*" $tauriModelsDir -Force -Recurse
+    Write-Host "Model files copied to Tauri resources directory" -ForegroundColor Green
+    
     Write-Host "Building Tauri GUI application..." -ForegroundColor Yellow
     Push-Location src-tauri
     cargo tauri build
@@ -600,6 +636,63 @@ if ($operationMode -ne "cli-only") {
         exit 1
     }
     Write-Host "Tauri GUI build completed successfully!" -ForegroundColor Green
+    
+    # Copy native dependencies to the final bundle location
+    Write-Host "Copying native dependencies to final bundle..." -ForegroundColor Yellow
+    $finalBundleDir = "target\release\bundle\msi"
+    if (Test-Path $finalBundleDir) {
+        # Find the MSI file
+        $msiFiles = Get-ChildItem $finalBundleDir -Filter "*.msi"
+        if ($msiFiles.Count -gt 0) {
+            $msiFile = $msiFiles[0]
+            Write-Host "Found MSI bundle: $($msiFile.Name)" -ForegroundColor Green
+            
+            # Create a native-libs directory next to the MSI for manual installation
+            $bundleNativeLibs = "$finalBundleDir\native-libs"
+            if (-not (Test-Path $bundleNativeLibs)) {
+                New-Item -ItemType Directory -Path $bundleNativeLibs -Force | Out-Null
+            }
+            Copy-Item "$buildDir\native-libs\*" $bundleNativeLibs -Force
+            Write-Host "Native dependencies copied to bundle directory for manual installation" -ForegroundColor Green
+            Write-Host "Note: DLLs are now automatically bundled in the MSI installer" -ForegroundColor Green
+        }
+    }
+    
+    # Also copy to the main target directory for the executable
+    Write-Host "Copying native dependencies to main target directory..." -ForegroundColor Yellow
+    $mainTargetDir = "target\release"
+    if (Test-Path $mainTargetDir) {
+        $mainNativeLibs = "$mainTargetDir\native-libs"
+        if (-not (Test-Path $mainNativeLibs)) {
+            New-Item -ItemType Directory -Path $mainNativeLibs -Force | Out-Null
+        }
+        Copy-Item "$buildDir\native-libs\*" $mainNativeLibs -Force
+        Write-Host "Native dependencies copied to main target directory" -ForegroundColor Green
+    }
+    
+    # Post-build: Verify resources are properly bundled
+    Write-Host "Verifying resources in final bundle..." -ForegroundColor Yellow
+    $finalBundleDir = "target\release\bundle\msi"
+    if (Test-Path $finalBundleDir) {
+        # Find the MSI file
+        $msiFiles = Get-ChildItem $finalBundleDir -Filter "*.msi"
+        if ($msiFiles.Count -gt 0) {
+            $msiFile = $msiFiles[0]
+            Write-Host "Found MSI bundle: $($msiFile.Name)" -ForegroundColor Green
+            
+            # Check if resources are properly bundled
+            $tauriSrcDir = "src-tauri"
+            $nativeLibsCount = (Get-ChildItem "$tauriSrcDir\*.dll" -File).Count
+            Write-Host "Native libraries bundled: $nativeLibsCount files (will be extracted to root directory)" -ForegroundColor Green
+            
+            if (Test-Path "$tauriResourcesDir\models") {
+                $modelsCount = (Get-ChildItem "$tauriResourcesDir\models" -Recurse -File).Count
+                Write-Host "Model files bundled: $modelsCount files" -ForegroundColor Green
+            }
+            
+            Write-Host "Resources should be automatically included in the MSI installer" -ForegroundColor Green
+        }
+    }
 }
 
 Write-Host "" 

@@ -14,7 +14,7 @@ fn main() {
     if let Err(e) = init_logging() {
         eprintln!("Failed to initialize logging: {}", e);
     }
-    
+
     // Create and run Tauri app
     let app = create_app();
     app.run(|_app_handle, _event| {});

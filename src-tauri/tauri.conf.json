@@ -32,6 +32,10 @@
     "targets": "all",
     "icon": [
       "../icons/icon.ico"
+    ],
+    "resources": [
+      "*.dll",
+      "resources/models/**/*"
     ]
   }
 } 

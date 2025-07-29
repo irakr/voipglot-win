@@ -283,6 +283,7 @@ Models are managed by the voipglot-core library. The Windows application doesn't
 3. **Model not found**: Check that model paths in config.toml are correct
 4. **Build errors**: Try `.\build.ps1 -Clean` to clean and rebuild
 5. **GUI not starting**: Ensure Tauri dependencies are installed with `cargo install tauri-cli --version '^2.0.0' --locked`
+6. **libvosk.dll missing**: The MSI installer may not include native dependencies. Copy `native-libs` from the bundle directory to the installation directory. Alternative: Run the executable from the `target\release` directory where native dependencies are available.
 
 ### Logs
 
