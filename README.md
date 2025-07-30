@@ -276,6 +276,102 @@ Models are managed by the voipglot-core library. The Windows application doesn't
 
 ## Troubleshooting
 
+### Debugging and Logs
+
+The application provides comprehensive logging for both frontend and backend components to help with debugging.
+
+#### Frontend Logs (TypeScript/UI)
+
+**Development Mode (Recommended for Debugging):**
+```powershell
+cd voipglot-win
+.\build.ps1 -TauriDev
+```
+
+This command:
+- **Automatically builds the frontend** (npm run build)
+- **Generates fresh dist/ directory** with latest TypeScript changes
+- **Automatically opens Developer Tools** with console visible
+- **Shows real-time TypeScript logs** in the browser console
+- **Enables hot reload** for frontend development
+- **Displays all UI interactions** and Tauri command calls
+
+**For Frontend-Only Changes:**
+```powershell
+cd voipglot-win
+.\build.ps1 -FrontendBuild
+```
+
+This will:
+- **Build only the frontend** (npm run build)
+- **Update the dist/ directory** with latest changes
+- **Skip Tauri backend** (faster for frontend-only work)
+
+**Manual Development (Alternative):**
+```powershell
+cd voipglot-win
+cargo tauri dev
+```
+
+**Note**: If you make changes to TypeScript files, you need to rebuild the frontend first:
+```powershell
+npm run build
+# Then restart cargo tauri dev
+```
+
+#### Backend Logs (Rust/Backend)
+
+**Log File Location:**
+- **File**: `voipglot-win.log` in the application directory
+- **Format**: Structured logging with timestamps and log levels
+- **Content**: All Rust backend operations, Tauri commands, and error conditions
+
+**Viewing Backend Logs:**
+```powershell
+# View the entire log file
+Get-Content voipglot-win.log
+
+# Follow the log in real-time (like tail -f)
+Get-Content voipglot-win.log -Wait
+
+# View last 50 lines
+Get-Content voipglot-win.log -Tail 50
+
+# Search for specific errors
+Get-Content voipglot-win.log | Select-String "ERROR"
+```
+
+**What You'll See in Backend Logs:**
+```
+2024-01-15T10:30:45.124Z INFO  voipglot_win::lib::commands > Test connection command called
+2024-01-15T10:30:45.125Z INFO  voipglot_win::lib::commands > Getting audio devices...
+2024-01-15T10:30:45.126Z INFO  voipglot_win::lib::commands > Found 3 input devices and 2 output devices
+2024-01-15T10:30:45.127Z INFO  voipglot_win::lib::commands > Starting audio processing with config: input=Microphone, output=Speakers, source=en, target=es
+2024-01-15T10:30:45.128Z INFO  voipglot_win::lib::commands > Configuration updated successfully
+2024-01-15T10:30:45.129Z INFO  voipglot_win::lib::commands > Creating VoipGlot pipeline...
+2024-01-15T10:30:45.130Z INFO  voipglot_win::lib::commands > Pipeline created successfully
+```
+
+#### Combined Debugging Workflow
+
+For comprehensive debugging, use both logging systems:
+
+1. **Start development mode**: `.\build.ps1 -TauriDev`
+2. **Open browser console** (automatically opened)
+3. **Monitor both consoles**:
+   - **Frontend console**: UI interactions, Tauri calls
+   - **Backend log file**: Rust operations, pipeline status
+4. **Test UI interactions** and watch both logs simultaneously
+
+**For Frontend Changes During Development:**
+1. **Make changes** to TypeScript files in `src/`
+2. **Rebuild frontend**: `.\build.ps1 -FrontendBuild`
+3. **Restart Tauri**: `cargo tauri dev` (or use `.\build.ps1 -TauriDev` again)
+
+#### Production Debugging
+
+For production builds, backend logs are always available in `voipglot-win.log`. Frontend debugging requires development mode.
+
 ### Common Issues
 
 1. **voipglot-core not found**: Ensure the voipglot-core library is in the parent directory
@@ -284,10 +380,6 @@ Models are managed by the voipglot-core library. The Windows application doesn't
 4. **Build errors**: Try `.\build.ps1 -Clean` to clean and rebuild
 5. **GUI not starting**: Ensure Tauri dependencies are installed with `cargo install tauri-cli --version '^2.0.0' --locked`
 6. **libvosk.dll missing**: The MSI installer may not include native dependencies. Copy `native-libs` from the bundle directory to the installation directory. Alternative: Run the executable from the `target\release` directory where native dependencies are available.
-
-### Logs
-
-The application creates logs in `voipglot-win.log` in the current directory. Enable debug logging with `--debug` for more detailed information.
 
 ## Development
 
@@ -335,6 +427,28 @@ The GUI is built with Tauri 2.0 using:
 - **Modern styling** with glassmorphism effects
 - **Real-time audio visualization**
 
+#### Development Workflow
+
+**⚠️ IMPORTANT: Proper Development Method**
+
+The application **must** be run using Tauri's development mode for full functionality:
+
+```powershell
+cd voipglot-win
+cargo tauri dev
+```
+
+**❌ DO NOT** access `http://localhost:1420/` directly in a browser. This will:
+- Run the frontend without the Tauri backend
+- Show an error overlay explaining the proper usage
+- Disable all audio processing and translation features
+
+**✅ DO** use `cargo tauri dev` which:
+- Opens the native Tauri window with full functionality
+- Automatically opens Developer Tools for debugging
+- Enables hot reload for frontend development
+- Provides access to all Tauri backend features
+
 #### Frontend Development
 
 The frontend uses TypeScript with Vite for fast development:
@@ -343,8 +457,8 @@ The frontend uses TypeScript with Vite for fast development:
 # Install frontend dependencies
 npm install
 
-# Start development server
-npm run dev
+# Start development server (for Tauri integration)
+cargo tauri dev
 
 # Build for production
 npm run build
@@ -355,6 +469,26 @@ The frontend structure follows modern web development practices with:
 - **Vite** for fast build times and hot reload
 - **ES modules** for modern JavaScript features
 - **Tauri APIs** for native desktop integration
+
+#### Debugging
+
+**Frontend Logs (TypeScript/UI):**
+```powershell
+cargo tauri dev
+```
+- **Automatically opens Developer Tools** with console visible
+- **Shows real-time TypeScript logs** in the browser console
+- **Enables hot reload** for frontend development
+- **Displays all UI interactions** and Tauri command calls
+
+**Backend Logs (Rust/Backend):**
+- **File**: `voipglot-win.log` in the application directory
+- **View with**: `Get-Content voipglot-win.log -Wait`
+
+**Combined Debugging:**
+1. Run `cargo tauri dev`
+2. Monitor both frontend console and backend log file
+3. Test UI interactions and watch both logs simultaneously
 
 ## License
 

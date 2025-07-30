@@ -11,7 +11,8 @@ param(
     [switch]$BuildOnly,
     [switch]$PackageOnly,
     [switch]$SetupOnly,
-    [switch]$TauriDev
+    [switch]$TauriDev,
+    [switch]$FrontendBuild
 )
 
 # Determine operation mode based on parameters
@@ -29,6 +30,8 @@ if ($Clean) {
     $operationMode = "setup"
 } elseif ($TauriDev) {
     $operationMode = "tauri-dev"
+} elseif ($FrontendBuild) {
+    $operationMode = "frontend-build"
 } elseif ($Fast -or $NoClippy -or $Test -or $Check) {
     # Build with specific options
     $operationMode = "build"
@@ -50,6 +53,7 @@ if ($showUsage) {
     Write-Host "  -PackageOnly        Package only (requires existing build)" -ForegroundColor White
     Write-Host "  -SetupOnly          Setup voipglot-core environment only" -ForegroundColor White
     Write-Host "  -TauriDev           Run Tauri in development mode (GUI)" -ForegroundColor White
+    Write-Host "  -FrontendBuild      Build only the frontend (no Tauri GUI)" -ForegroundColor White
     Write-Host ""
     Write-Host "Build options:" -ForegroundColor Cyan
     Write-Host "  -Fast               Use fast build profile (faster compilation)" -ForegroundColor White
@@ -65,6 +69,7 @@ if ($showUsage) {
     Write-Host "  .\build.ps1 -PackageOnly       # Package only" -ForegroundColor White
     Write-Host "  .\build.ps1 -SetupOnly         # Setup environment only" -ForegroundColor White
     Write-Host "  .\build.ps1 -TauriDev          # Run Tauri GUI in development" -ForegroundColor White
+    Write-Host "  .\build.ps1 -FrontendBuild     # Build only the frontend" -ForegroundColor White
     Write-Host ""
 }
 
@@ -164,7 +169,7 @@ switch ($operationMode) {
     }
     "tauri-dev" {
         Write-Host "Tauri Development mode: Running Tauri GUI in development..." -ForegroundColor Yellow
-        Write-Host "This will start the GUI application with hot reloading" -ForegroundColor Cyan
+        Write-Host "This will build the frontend and start the GUI application with hot reloading" -ForegroundColor Cyan
         
         # Check if Node.js and npm are installed
         Write-Host "Checking Node.js and npm installation..." -ForegroundColor Yellow
@@ -193,6 +198,17 @@ switch ($operationMode) {
         }
         Write-Host "Frontend dependencies installed successfully" -ForegroundColor Green
         
+        # Build frontend to ensure dist directory is up to date
+        Write-Host "Building frontend to ensure dist directory is up to date..." -ForegroundColor Yellow
+        npm run build
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "Error: Failed to build frontend" -ForegroundColor Red
+            Write-Host "Try running 'npm run build' manually to see detailed error messages" -ForegroundColor Yellow
+            exit 1
+        }
+        Write-Host "Frontend built successfully" -ForegroundColor Green
+        Write-Host "dist/ directory is now up to date with latest TypeScript changes" -ForegroundColor Green
+        
         # Check if Tauri CLI is installed
         try {
             $tauriVersion = cargo tauri --version 2>$null
@@ -211,6 +227,8 @@ switch ($operationMode) {
         }
         
         Write-Host "Starting Tauri development server..." -ForegroundColor Yellow
+        Write-Host "Note: For frontend changes, you may need to run 'npm run build' again" -ForegroundColor Cyan
+        Write-Host "Then restart the Tauri development server with 'cargo tauri dev'" -ForegroundColor Cyan
         Push-Location src-tauri
         cargo tauri dev
         Pop-Location
@@ -231,6 +249,60 @@ switch ($operationMode) {
     "full" {
         Write-Host "Full mode: Extract package, build Tauri GUI, and package..." -ForegroundColor Yellow
         # Continue with normal full process including Tauri GUI
+    }
+    "frontend-build" {
+        Write-Host "Frontend-only mode: Building frontend only..." -ForegroundColor Yellow
+        Write-Host "This will build the TypeScript frontend and generate the dist/ directory" -ForegroundColor Cyan
+        
+        # Check if Node.js and npm are installed
+        Write-Host "Checking Node.js and npm installation..." -ForegroundColor Yellow
+        try {
+            $nodeVersion = node --version 2>$null
+            $npmVersion = npm --version 2>$null
+            if ($LASTEXITCODE -ne 0) {
+                throw "Node.js or npm not found"
+            }
+            Write-Host "Node.js found: $nodeVersion" -ForegroundColor Green
+            Write-Host "npm found: $npmVersion" -ForegroundColor Green
+        } catch {
+            Write-Host "Error: Node.js or npm is not installed" -ForegroundColor Red
+            Write-Host "Please install Node.js from https://nodejs.org/ (includes npm)" -ForegroundColor Yellow
+            Write-Host "After installation, restart PowerShell and run the build script again" -ForegroundColor Yellow
+            exit 1
+        }
+
+        # Install frontend dependencies
+        Write-Host "Installing frontend dependencies..." -ForegroundColor Yellow
+        npm install
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "Error: Failed to install frontend dependencies" -ForegroundColor Red
+            Write-Host "Try running 'npm install' manually to see detailed error messages" -ForegroundColor Yellow
+            exit 1
+        }
+        Write-Host "Frontend dependencies installed successfully" -ForegroundColor Green
+        
+        # Build frontend
+        Write-Host "Building frontend..." -ForegroundColor Yellow
+        npm run build
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "Error: Failed to build frontend" -ForegroundColor Red
+            Write-Host "Try running 'npm run build' manually to see detailed error messages" -ForegroundColor Yellow
+            exit 1
+        }
+        Write-Host "Frontend built successfully" -ForegroundColor Green
+        Write-Host "dist/ directory is now up to date with latest TypeScript changes" -ForegroundColor Green
+        
+        Write-Host ""
+        Write-Host "========================================" -ForegroundColor Green
+        Write-Host "Frontend build completed successfully!" -ForegroundColor Green
+        Write-Host "========================================" -ForegroundColor Green
+        Write-Host ""
+        Write-Host "Next steps:" -ForegroundColor Yellow
+        Write-Host "  - Run Tauri development: .\build.ps1 -TauriDev" -ForegroundColor White
+        Write-Host "  - Build full application: .\build.ps1 -BuildOnly" -ForegroundColor White
+        Write-Host "  - Or run cargo tauri dev directly" -ForegroundColor White
+        Write-Host ""
+        exit 0
     }
 }
 
@@ -673,6 +745,7 @@ Write-Host "- Fast development builds: .\build.ps1 -Fast" -ForegroundColor White
 Write-Host "- Skip clippy for speed: .\build.ps1 -Fast -NoClippy" -ForegroundColor White
 Write-Host "- Production builds: .\build.ps1 (default, optimized)" -ForegroundColor White
 Write-Host "- Build only (no installers): .\build.ps1 -BuildOnly" -ForegroundColor White
+Write-Host "- Frontend only: .\build.ps1 -FrontendBuild" -ForegroundColor White
 Write-Host "- Clean when needed: .\build.ps1 -Clean" -ForegroundColor White
 Write-Host "- Dependencies are cached for faster subsequent builds" -ForegroundColor White
 

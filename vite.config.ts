@@ -1,6 +1,6 @@
 import { defineConfig } from "vite";
 
-export default defineConfig(async () => ({
+export default defineConfig({
   clearScreen: false,
   // Set the root directory to src where index.html is located
   root: "src",
@@ -16,4 +16,4 @@ export default defineConfig(async () => ({
     // Build output goes to dist/ relative to project root
     outDir: "../dist",
   },
-})); 
+}); 
