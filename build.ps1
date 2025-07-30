@@ -246,7 +246,7 @@ Write-Host "RUSTFLAGS set to: $env:RUSTFLAGS" -ForegroundColor Green
 # Extract voipglot-core package for runtime dependencies (models, native libs)
 Write-Host "" 
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "Extracting voipglot-core package for runtime dependencies..." -ForegroundColor Cyan
+Write-Host "Checking voipglot-core package for runtime dependencies..." -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 
 # Check for voipglot-core package
@@ -265,46 +265,63 @@ if (-not (Test-Path $packagePath)) {
     exit 1
 }
 
-Write-Host "Found package: $packagePath" -ForegroundColor Green
-
-# Extract package to build directory
+# Check if build directory already exists and contains required files
+$extractionNeeded = $true
 if (Test-Path $buildDir) {
-    Write-Host "Removing existing build directory..." -ForegroundColor Yellow
-    Remove-Item $buildDir -Recurse -Force
-}
-
-Write-Host "Extracting package to: $buildDir" -ForegroundColor Yellow
-try {
-    Expand-Archive -Path $packagePath -DestinationPath $buildDir -Force
-    Write-Host "Package extracted successfully" -ForegroundColor Green
-} catch {
-    Write-Host "Error extracting package: $_" -ForegroundColor Red
-    exit 1
-}
-
-# Verify package contents for runtime dependencies
-$requiredFiles = @(
-    "models",
-    "native-libs"
-)
-
-$missingFiles = @()
-foreach ($file in $requiredFiles) {
-    if (-not (Test-Path "$buildDir\$file")) {
-        $missingFiles += $file
+    # Check if required runtime files exist
+    $requiredFiles = @("models", "native-libs")
+    $missingFiles = @()
+    
+    foreach ($file in $requiredFiles) {
+        if (-not (Test-Path "$buildDir\$file")) {
+            $missingFiles += $file
+        }
+    }
+    
+    if ($missingFiles.Count -eq 0) {
+        $absoluteBuildDir = (Resolve-Path $buildDir).Path
+        Write-Host "Found extracted voipglot-core package in $absoluteBuildDir" -ForegroundColor Green
+        $extractionNeeded = $false
+    } else {
+        Write-Host "Re-extracting voipglot-core package (missing: $($missingFiles -join ', '))" -ForegroundColor Yellow
     }
 }
 
-if ($missingFiles.Count -gt 0) {
-    Write-Host "Error: Package is missing required runtime files:" -ForegroundColor Red
-    foreach ($file in $missingFiles) {
-        Write-Host "  - $file" -ForegroundColor Red
+# Extract package if needed
+if ($extractionNeeded) {
+    if (Test-Path $buildDir) {
+        Remove-Item $buildDir -Recurse -Force
     }
-    Write-Host "Please ensure you have a valid voipglot-core distribution package" -ForegroundColor Yellow
-    exit 1
-}
 
-Write-Host "Runtime dependencies verified" -ForegroundColor Green
+    Write-Host "Extracting voipglot-core package..." -ForegroundColor Yellow
+    try {
+        Expand-Archive -Path $packagePath -DestinationPath $buildDir -Force
+        $absoluteBuildDir = (Resolve-Path $buildDir).Path
+        Write-Host "voipglot-core package extracted successfully to $absoluteBuildDir" -ForegroundColor Green
+    } catch {
+        Write-Host "Error extracting package: $_" -ForegroundColor Red
+        exit 1
+    }
+
+    # Verify package contents for runtime dependencies
+    $requiredFiles = @("models", "native-libs")
+    $missingFiles = @()
+    
+    foreach ($file in $requiredFiles) {
+        if (-not (Test-Path "$buildDir\$file")) {
+            $missingFiles += $file
+        }
+    }
+
+    if ($missingFiles.Count -gt 0) {
+        Write-Host "Error: Package is missing required runtime files:" -ForegroundColor Red
+        foreach ($file in $missingFiles) {
+            Write-Host "  - $file" -ForegroundColor Red
+        }
+        Write-Host "Please ensure you have a valid voipglot-core distribution package" -ForegroundColor Yellow
+        exit 1
+    }
+}
 
 # Set up VOSK environment variables for linking
 Write-Host "" 
