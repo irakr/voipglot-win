@@ -321,23 +321,7 @@ Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "Checking voipglot-core package for runtime dependencies..." -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 
-# Check for voipglot-core package
-if (-not $env:LIBVOIPGLOT_CORE_PKG) {
-    Write-Host "Error: LIBVOIPGLOT_CORE_PKG environment variable not set" -ForegroundColor Red
-    Write-Host "Please set the path to the voipglot-core package ZIP file:" -ForegroundColor Yellow
-    Write-Host "  `$env:LIBVOIPGLOT_CORE_PKG = 'path/to/voipglot-core-release.zip'" -ForegroundColor White
-    Write-Host "Then run: .\build.ps1" -ForegroundColor White
-    exit 1
-}
-
-$packagePath = $env:LIBVOIPGLOT_CORE_PKG
-if (-not (Test-Path $packagePath)) {
-    Write-Host "Error: Package file not found at: $packagePath" -ForegroundColor Red
-    Write-Host "Please check the LIBVOIPGLOT_CORE_PKG environment variable" -ForegroundColor Yellow
-    exit 1
-}
-
-# Check if build directory already exists and contains required files
+# First check if the extracted build directory already exists and contains required files
 $extractionNeeded = $true
 if (Test-Path $buildDir) {
     # Check if required runtime files exist
@@ -356,6 +340,25 @@ if (Test-Path $buildDir) {
         $extractionNeeded = $false
     } else {
         Write-Host "Re-extracting voipglot-core package (missing: $($missingFiles -join ', '))" -ForegroundColor Yellow
+    }
+}
+
+# Only check for package file if extraction is needed
+if ($extractionNeeded) {
+    # Check for voipglot-core package
+    if (-not $env:LIBVOIPGLOT_CORE_PKG) {
+        Write-Host "Error: LIBVOIPGLOT_CORE_PKG environment variable not set" -ForegroundColor Red
+        Write-Host "Please set the path to the voipglot-core package ZIP file:" -ForegroundColor Yellow
+        Write-Host "  `$env:LIBVOIPGLOT_CORE_PKG = 'path/to/voipglot-core-release.zip'" -ForegroundColor White
+        Write-Host "Then run: .\build.ps1" -ForegroundColor White
+        exit 1
+    }
+
+    $packagePath = $env:LIBVOIPGLOT_CORE_PKG
+    if (-not (Test-Path $packagePath)) {
+        Write-Host "Error: Package file not found at: $packagePath" -ForegroundColor Red
+        Write-Host "Please check the LIBVOIPGLOT_CORE_PKG environment variable" -ForegroundColor Yellow
+        exit 1
     }
 }
 
