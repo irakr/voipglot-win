@@ -11,9 +11,7 @@ param(
     [switch]$BuildOnly,
     [switch]$PackageOnly,
     [switch]$SetupOnly,
-    [switch]$TauriDev,
-    [switch]$CliOnly,
-    [switch]$TauriOnly
+    [switch]$TauriDev
 )
 
 # Determine operation mode based on parameters
@@ -31,10 +29,6 @@ if ($Clean) {
     $operationMode = "setup"
 } elseif ($TauriDev) {
     $operationMode = "tauri-dev"
-} elseif ($CliOnly) {
-    $operationMode = "cli-only"
-} elseif ($TauriOnly) {
-    $operationMode = "tauri-only"
 } elseif ($Fast -or $NoClippy -or $Test -or $Check) {
     # Build with specific options
     $operationMode = "build"
@@ -48,17 +42,13 @@ if ($showUsage) {
     Write-Host "Usage: .\build.ps1 [options]" -ForegroundColor Yellow
     Write-Host ""
     Write-Host "Default behavior (no flags): Full build with Tauri GUI" -ForegroundColor Cyan
-    Write-Host "  - Extract voipglot-core package, build CLI and Tauri GUI, create executables" -ForegroundColor White
+    Write-Host "  - Extract voipglot-core package, build Tauri GUI, create executables" -ForegroundColor White
     Write-Host ""
     Write-Host "Operation modes:" -ForegroundColor Cyan
     Write-Host "  -Clean              Clean previous builds and exit" -ForegroundColor White
     Write-Host "  -BuildOnly          Build only (no package extraction)" -ForegroundColor White
     Write-Host "  -PackageOnly        Package only (requires existing build)" -ForegroundColor White
     Write-Host "  -SetupOnly          Setup voipglot-core environment only" -ForegroundColor White
-    Write-Host ""
-    Write-Host "Build targets:" -ForegroundColor Cyan
-    Write-Host "  -CliOnly            Build CLI application only (no GUI)" -ForegroundColor White
-    Write-Host "  -TauriOnly          Build Tauri GUI only (skip CLI)" -ForegroundColor White
     Write-Host "  -TauriDev           Run Tauri in development mode (GUI)" -ForegroundColor White
     Write-Host ""
     Write-Host "Build options:" -ForegroundColor Cyan
@@ -74,8 +64,6 @@ if ($showUsage) {
     Write-Host "  .\build.ps1 -BuildOnly         # Build only" -ForegroundColor White
     Write-Host "  .\build.ps1 -PackageOnly       # Package only" -ForegroundColor White
     Write-Host "  .\build.ps1 -SetupOnly         # Setup environment only" -ForegroundColor White
-    Write-Host "  .\build.ps1 -CliOnly           # Build CLI application only" -ForegroundColor White
-    Write-Host "  .\build.ps1 -TauriOnly         # Build Tauri GUI only" -ForegroundColor White
     Write-Host "  .\build.ps1 -TauriDev          # Run Tauri GUI in development" -ForegroundColor White
     Write-Host ""
 }
@@ -228,71 +216,6 @@ switch ($operationMode) {
         Pop-Location
         exit $LASTEXITCODE
     }
-    "cli-only" {
-        Write-Host "CLI Only mode: Building CLI application only..." -ForegroundColor Yellow
-        # Continue with normal CLI build process
-    }
-    "tauri-only" {
-        Write-Host "Tauri Only mode: Building Tauri GUI only (skip CLI)..." -ForegroundColor Yellow
-        
-        # Check if Node.js and npm are installed
-        Write-Host "Checking Node.js and npm installation..." -ForegroundColor Yellow
-        try {
-            $nodeVersion = node --version 2>$null
-            $npmVersion = npm --version 2>$null
-            if ($LASTEXITCODE -ne 0) {
-                throw "Node.js or npm not found"
-            }
-            Write-Host "Node.js found: $nodeVersion" -ForegroundColor Green
-            Write-Host "npm found: $npmVersion" -ForegroundColor Green
-        } catch {
-            Write-Host "Error: Node.js or npm is not installed" -ForegroundColor Red
-            Write-Host "Please install Node.js from https://nodejs.org/ (includes npm)" -ForegroundColor Yellow
-            Write-Host "After installation, restart PowerShell and run the build script again" -ForegroundColor Yellow
-            exit 1
-        }
-
-        # Install frontend dependencies
-        Write-Host "Installing frontend dependencies..." -ForegroundColor Yellow
-        npm install
-        if ($LASTEXITCODE -ne 0) {
-            Write-Host "Error: Failed to install frontend dependencies" -ForegroundColor Red
-            Write-Host "Try running 'npm install' manually to see detailed error messages" -ForegroundColor Yellow
-            exit 1
-        }
-        Write-Host "Frontend dependencies installed successfully" -ForegroundColor Green
-        
-        # Check if Tauri CLI is installed
-        try {
-            $tauriVersion = cargo tauri --version 2>$null
-            if ($LASTEXITCODE -ne 0) {
-                throw "Tauri CLI not found"
-            }
-            Write-Host "Tauri CLI found: $tauriVersion" -ForegroundColor Green
-        } catch {
-            Write-Host "Error: Tauri CLI is not installed" -ForegroundColor Red
-            Write-Host "Installing Tauri CLI..." -ForegroundColor Yellow
-            cargo install tauri-cli --version '^2.0.0' --locked
-            if ($LASTEXITCODE -ne 0) {
-                Write-Host "Error: Failed to install Tauri CLI" -ForegroundColor Red
-                exit 1
-            }
-        }
-        
-        Write-Host "Building Tauri application..." -ForegroundColor Yellow
-        Push-Location src-tauri
-        cargo tauri build
-        $tauriExitCode = $LASTEXITCODE
-        Pop-Location
-        if ($tauriExitCode -eq 0) {
-            Write-Host "Tauri build completed successfully!" -ForegroundColor Green
-            Write-Host "Output files are in: target\release\bundle\" -ForegroundColor Cyan
-        } else {
-            Write-Host "Error: Tauri build failed!" -ForegroundColor Red
-            exit 1
-        }
-        exit 0
-    }
     "setup" {
         Write-Host "Setup mode: Setting up voipglot-core environment only..." -ForegroundColor Yellow
         # Continue with package extraction and setup
@@ -306,7 +229,7 @@ switch ($operationMode) {
         # Skip to package creation
     }
     "full" {
-        Write-Host "Full mode: Extract package, build CLI and Tauri GUI, and package..." -ForegroundColor Yellow
+        Write-Host "Full mode: Extract package, build Tauri GUI, and package..." -ForegroundColor Yellow
         # Continue with normal full process including Tauri GUI
     }
 }
@@ -517,124 +440,116 @@ if ($Fast) {
     Write-Host "  - Reduced optimization level (still good performance)" -ForegroundColor Gray
 }
 
-# Build the CLI application
-if ($operationMode -ne "tauri-only") {
-    Write-Host "Building CLI application..." -ForegroundColor Yellow
-    if ($fastBuild) {
-        Write-Host "Building fast release version..." -ForegroundColor Yellow
-        cargo build --profile fast-release --target x86_64-pc-windows-msvc
-    } else {
-        Write-Host "Building optimized release version..." -ForegroundColor Yellow
-        Write-Host "  - Using LTO for maximum performance (slower build)" -ForegroundColor Gray
-        Write-Host "  - Single-threaded compilation for best optimization" -ForegroundColor Gray
-        cargo build --release --target x86_64-pc-windows-msvc
-    }
+# Build the Tauri GUI application (which includes CLI functionality)
+Write-Host "" 
+Write-Host "========================================" -ForegroundColor Cyan
+Write-Host "Building Tauri GUI Application..." -ForegroundColor Cyan
+Write-Host "========================================" -ForegroundColor Cyan
 
+# Check if Node.js and npm are installed
+Write-Host "Checking Node.js and npm installation..." -ForegroundColor Yellow
+try {
+    $nodeVersion = node --version 2>$null
+    $npmVersion = npm --version 2>$null
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "Error: CLI build failed!" -ForegroundColor Red
-        Write-Host "Try running with -Clean flag if you suspect cached issues:" -ForegroundColor Yellow
-        Write-Host "  .\build.ps1 -Clean" -ForegroundColor White
-        Write-Host "Or try fast build for quicker iteration:" -ForegroundColor Yellow
-        Write-Host "  .\build.ps1 -Fast" -ForegroundColor White
-        exit 1
+        throw "Node.js or npm not found"
     }
+    Write-Host "Node.js found: $nodeVersion" -ForegroundColor Green
+    Write-Host "npm found: $npmVersion" -ForegroundColor Green
+} catch {
+    Write-Host "Error: Node.js or npm is not installed" -ForegroundColor Red
+    Write-Host "Please install Node.js from https://nodejs.org/ (includes npm)" -ForegroundColor Yellow
+    Write-Host "After installation, restart PowerShell and run the build script again" -ForegroundColor Yellow
+    exit 1
+}
 
-    # Run clippy after successful CLI build (uses cached dependencies)
-    if ($runClippy) {
-        Write-Host "Running clippy for CLI (using cached dependencies)..." -ForegroundColor Yellow
-        if ($fastBuild) {
-            cargo clippy --profile fast-release --target x86_64-pc-windows-msvc
-        } else {
-            cargo clippy --release --target x86_64-pc-windows-msvc
-        }
-        if ($LASTEXITCODE -ne 0) {
-            Write-Host "Warning: Clippy found issues, but CLI build completed successfully" -ForegroundColor Yellow
-        } else {
-            Write-Host "Clippy passed successfully for CLI" -ForegroundColor Green
-        }
+# Install frontend dependencies
+Write-Host "Installing frontend dependencies..." -ForegroundColor Yellow
+npm install
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Error: Failed to install frontend dependencies" -ForegroundColor Red
+    Write-Host "Try running 'npm install' manually to see detailed error messages" -ForegroundColor Yellow
+    exit 1
+}
+Write-Host "Frontend dependencies installed successfully" -ForegroundColor Green
+
+# Check if Tauri CLI is installed
+try {
+    $tauriVersion = cargo tauri --version 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        throw "Tauri CLI not found"
+    }
+    Write-Host "Tauri CLI found: $tauriVersion" -ForegroundColor Green
+} catch {
+    Write-Host "Error: Tauri CLI is not installed" -ForegroundColor Red
+    Write-Host "Installing Tauri CLI..." -ForegroundColor Yellow
+    cargo install tauri-cli --version '^2.0.0' --locked
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "Error: Failed to install Tauri CLI" -ForegroundColor Red
+        exit 1
     }
 }
 
-# Build Tauri GUI application
-if ($operationMode -ne "cli-only") {
-    Write-Host "" 
-    Write-Host "========================================" -ForegroundColor Cyan
-    Write-Host "Building Tauri GUI Application..." -ForegroundColor Cyan
-    Write-Host "========================================" -ForegroundColor Cyan
+# Copy native dependencies and models to Tauri bundle directory before building
+Write-Host "Copying native dependencies and models to Tauri bundle directory..." -ForegroundColor Yellow
+$tauriSrcDir = "src-tauri"
+$tauriResourcesDir = "$tauriSrcDir\resources"
 
-    # Check if Node.js and npm are installed
-    Write-Host "Checking Node.js and npm installation..." -ForegroundColor Yellow
-    try {
-        $nodeVersion = node --version 2>$null
-        $npmVersion = npm --version 2>$null
-        if ($LASTEXITCODE -ne 0) {
-            throw "Node.js or npm not found"
-        }
-        Write-Host "Node.js found: $nodeVersion" -ForegroundColor Green
-        Write-Host "npm found: $npmVersion" -ForegroundColor Green
-    } catch {
-        Write-Host "Error: Node.js or npm is not installed" -ForegroundColor Red
-        Write-Host "Please install Node.js from https://nodejs.org/ (includes npm)" -ForegroundColor Yellow
-        Write-Host "After installation, restart PowerShell and run the build script again" -ForegroundColor Yellow
-        exit 1
-    }
+# Copy native libraries to Tauri src directory root (will be bundled in root)
+Copy-Item "$buildDir\native-libs\*.dll" $tauriSrcDir -Force
+Write-Host "Native dependencies copied to Tauri src directory root" -ForegroundColor Green
 
-    # Install frontend dependencies
-    Write-Host "Installing frontend dependencies..." -ForegroundColor Yellow
-    npm install
+# Copy model files to resources subdirectory
+if (-not (Test-Path $tauriResourcesDir)) {
+    New-Item -ItemType Directory -Path $tauriResourcesDir -Force | Out-Null
+}
+$tauriModelsDir = "$tauriResourcesDir\models"
+if (-not (Test-Path $tauriModelsDir)) {
+    New-Item -ItemType Directory -Path $tauriModelsDir -Force | Out-Null
+}
+Copy-Item "$buildDir\models\*" $tauriModelsDir -Force -Recurse
+Write-Host "Model files copied to Tauri resources directory" -ForegroundColor Green
+
+Write-Host "Building Tauri GUI application..." -ForegroundColor Yellow
+Push-Location src-tauri
+
+if ($operationMode -eq "build") {
+    # For build-only mode, build frontend first, then use cargo build
+    Write-Host "Build-only mode: Building frontend first..." -ForegroundColor Yellow
+    Pop-Location
+    
+    # Build the frontend
+    Write-Host "Building frontend with npm..." -ForegroundColor Yellow
+    npm run build
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "Error: Failed to install frontend dependencies" -ForegroundColor Red
-        Write-Host "Try running 'npm install' manually to see detailed error messages" -ForegroundColor Yellow
+        Write-Host "Error: Frontend build failed!" -ForegroundColor Red
         exit 1
     }
-    Write-Host "Frontend dependencies installed successfully" -ForegroundColor Green
-
-    # Check if Tauri CLI is installed
-    try {
-        $tauriVersion = cargo tauri --version 2>$null
-        if ($LASTEXITCODE -ne 0) {
-            throw "Tauri CLI not found"
-        }
-        Write-Host "Tauri CLI found: $tauriVersion" -ForegroundColor Green
-    } catch {
-        Write-Host "Error: Tauri CLI is not installed" -ForegroundColor Red
-        Write-Host "Installing Tauri CLI..." -ForegroundColor Yellow
-        cargo install tauri-cli --version '^2.0.0' --locked
-        if ($LASTEXITCODE -ne 0) {
-            Write-Host "Error: Failed to install Tauri CLI" -ForegroundColor Red
-            exit 1
-        }
-    }
-
-    # Copy native dependencies and models to Tauri bundle directory before building
-    Write-Host "Copying native dependencies and models to Tauri bundle directory..." -ForegroundColor Yellow
-    $tauriSrcDir = "src-tauri"
-    $tauriResourcesDir = "$tauriSrcDir\resources"
+    Write-Host "Frontend built successfully" -ForegroundColor Green
     
-    # Copy native libraries to Tauri src directory root (will be bundled in root)
-    Copy-Item "$buildDir\native-libs\*.dll" $tauriSrcDir -Force
-    Write-Host "Native dependencies copied to Tauri src directory root" -ForegroundColor Green
-    
-    # Copy model files to resources subdirectory
-    if (-not (Test-Path $tauriResourcesDir)) {
-        New-Item -ItemType Directory -Path $tauriResourcesDir -Force | Out-Null
-    }
-    $tauriModelsDir = "$tauriResourcesDir\models"
-    if (-not (Test-Path $tauriModelsDir)) {
-        New-Item -ItemType Directory -Path $tauriModelsDir -Force | Out-Null
-    }
-    Copy-Item "$buildDir\models\*" $tauriModelsDir -Force -Recurse
-    Write-Host "Model files copied to Tauri resources directory" -ForegroundColor Green
-    
-    Write-Host "Building Tauri GUI application..." -ForegroundColor Yellow
+    # Now build the Rust application
+    Write-Host "Building Rust application with cargo build..." -ForegroundColor Yellow
     Push-Location src-tauri
+    cargo build --release
+    $tauriExitCode = $LASTEXITCODE
+} else {
+    # For full mode, use cargo tauri build (creates installers and handles frontend)
+    Write-Host "Using cargo tauri build for full mode (creates installers)..." -ForegroundColor Yellow
     cargo tauri build
     $tauriExitCode = $LASTEXITCODE
-    Pop-Location
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "Error: Tauri GUI build failed!" -ForegroundColor Red
-        exit 1
-    }
+}
+
+Pop-Location
+
+if ($tauriExitCode -ne 0) {
+    Write-Host "Error: Tauri GUI build failed!" -ForegroundColor Red
+    exit 1
+}
+
+if ($operationMode -eq "build") {
+    Write-Host "Tauri GUI build completed successfully (executable only)!" -ForegroundColor Green
+    Write-Host "Executable location: target\release\voipglot-win.exe" -ForegroundColor Cyan
+} else {
     Write-Host "Tauri GUI build completed successfully!" -ForegroundColor Green
     
     # Copy native dependencies to the final bundle location
@@ -656,18 +571,6 @@ if ($operationMode -ne "cli-only") {
             Write-Host "Native dependencies copied to bundle directory for manual installation" -ForegroundColor Green
             Write-Host "Note: DLLs are now automatically bundled in the MSI installer" -ForegroundColor Green
         }
-    }
-    
-    # Also copy to the main target directory for the executable
-    Write-Host "Copying native dependencies to main target directory..." -ForegroundColor Yellow
-    $mainTargetDir = "target\release"
-    if (Test-Path $mainTargetDir) {
-        $mainNativeLibs = "$mainTargetDir\native-libs"
-        if (-not (Test-Path $mainNativeLibs)) {
-            New-Item -ItemType Directory -Path $mainNativeLibs -Force | Out-Null
-        }
-        Copy-Item "$buildDir\native-libs\*" $mainNativeLibs -Force
-        Write-Host "Native dependencies copied to main target directory" -ForegroundColor Green
     }
     
     # Post-build: Verify resources are properly bundled
@@ -695,33 +598,29 @@ if ($operationMode -ne "cli-only") {
     }
 }
 
+# Also copy to the main target directory for the executable
+Write-Host "Copying native dependencies to main target directory..." -ForegroundColor Yellow
+$mainTargetDir = "target\release"
+if (Test-Path $mainTargetDir) {
+    $mainNativeLibs = "$mainTargetDir\native-libs"
+    if (-not (Test-Path $mainNativeLibs)) {
+        New-Item -ItemType Directory -Path $mainNativeLibs -Force | Out-Null
+    }
+    Copy-Item "$buildDir\native-libs\*" $mainNativeLibs -Force
+    Write-Host "Native dependencies copied to main target directory" -ForegroundColor Green
+}
+
 Write-Host "" 
 Write-Host "========================================" -ForegroundColor Green
 Write-Host "Build completed successfully!" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Green
 Write-Host ""
 
-# Show executable locations based on what was built
-if ($operationMode -ne "tauri-only") {
-    # Show CLI executable location based on profile
-    if ($fastBuild) {
-        $targetDir = "target\fast-release"
-        Write-Host "CLI Executable location: $targetDir\voipglot-win.exe" -ForegroundColor Cyan
-    } else {
-        $targetDir = "target\release"
-        Write-Host "CLI Executable location: $targetDir\voipglot-win.exe" -ForegroundColor Cyan
-    }
-
-    # Copy configuration file to target directory (preserve existing config)
-    if (Test-Path "config.toml") {
-        Copy-Item "config.toml" $targetDir -Force
-        Write-Host "Configuration file copied to CLI target directory" -ForegroundColor Green
-    } else {
-        Write-Host "Warning: config.toml not found. Please create one before running the CLI application." -ForegroundColor Yellow
-    }
-}
-
-if ($operationMode -ne "cli-only") {
+# Show executable locations
+if ($operationMode -eq "build") {
+    Write-Host "Tauri GUI Executable location: target\release\voipglot-win.exe" -ForegroundColor Cyan
+    Write-Host "Build-only mode: No installers created" -ForegroundColor Yellow
+} else {
     Write-Host "Tauri GUI Executable location: target\release\bundle\" -ForegroundColor Cyan
     Write-Host "Tauri GUI files:" -ForegroundColor Cyan
     if (Test-Path "target\release\bundle\msi") {
@@ -738,33 +637,26 @@ if ($operationMode -ne "cli-only") {
 Write-Host ""
 Write-Host "VoipGlot Windows Application:" -ForegroundColor Green
 Write-Host "=============================" -ForegroundColor Green
-if ($operationMode -ne "tauri-only") {
-    Write-Host "[OK] CLI built successfully using voipglot-core library" -ForegroundColor White
-}
-if ($operationMode -ne "cli-only") {
-    Write-Host "[OK] Tauri GUI built successfully with modern interface" -ForegroundColor White
-}
+Write-Host "[OK] Tauri GUI built successfully with modern interface" -ForegroundColor White
 Write-Host "[OK] Audio processing and translation handled by core library" -ForegroundColor White
 Write-Host "[OK] Windows-specific optimizations applied" -ForegroundColor White
 
 Write-Host ""
-Write-Host "To run the applications:" -ForegroundColor Yellow
-if ($operationMode -ne "tauri-only") {
-    Write-Host "  CLI: $targetDir\voipglot-win.exe" -ForegroundColor White
-}
-if ($operationMode -ne "cli-only") {
+Write-Host "To run the application:" -ForegroundColor Yellow
+if ($operationMode -eq "build") {
+    Write-Host "  Executable: target\release\voipglot-win.exe" -ForegroundColor White
+} else {
     Write-Host "  GUI: Run the installer from target\release\bundle\" -ForegroundColor White
-    Write-Host "  GUI Dev: .\build.ps1 -TauriDev" -ForegroundColor White
 }
+Write-Host "  GUI Dev: .\build.ps1 -TauriDev" -ForegroundColor White
 
 Write-Host ""
 Write-Host "Build optimization tips:" -ForegroundColor Yellow
 Write-Host "- Fast development builds: .\build.ps1 -Fast" -ForegroundColor White
 Write-Host "- Skip clippy for speed: .\build.ps1 -Fast -NoClippy" -ForegroundColor White
 Write-Host "- Production builds: .\build.ps1 (default, optimized)" -ForegroundColor White
+Write-Host "- Build only (no installers): .\build.ps1 -BuildOnly" -ForegroundColor White
 Write-Host "- Clean when needed: .\build.ps1 -Clean" -ForegroundColor White
-Write-Host "- CLI only: .\build.ps1 -CliOnly" -ForegroundColor White
-Write-Host "- GUI only: .\build.ps1 -TauriOnly" -ForegroundColor White
 Write-Host "- Dependencies are cached for faster subsequent builds" -ForegroundColor White
 
 Write-Host ""
@@ -784,46 +676,39 @@ Write-Host "1. Models are managed by voipglot-core library" -ForegroundColor Whi
 Write-Host "2. Install VB-CABLE Virtual Audio Device if needed" -ForegroundColor White
 Write-Host "3. Your config.toml file is preserved and not overwritten" -ForegroundColor White
 Write-Host "4. Using voipglot-core as Cargo dependency" -ForegroundColor White
-Write-Host "5. Both CLI and GUI applications are now available" -ForegroundColor White
+Write-Host "5. The application includes both GUI and CLI functionality" -ForegroundColor White
 Write-Host ""
 
-# Copy runtime dependencies to target directory (only for CLI builds)
-if ($operationMode -ne "tauri-only") {
-    Write-Host "Copying runtime dependencies to CLI target directory..." -ForegroundColor Yellow
+# Copy runtime dependencies to target directory
+Write-Host "Copying runtime dependencies to target directory..." -ForegroundColor Yellow
 
-    # Copy models to target directory for runtime access
-    Write-Host "Copying models to target directory..." -ForegroundColor Yellow
-    if (Test-Path "$buildDir\models") {
-        Copy-Item "$buildDir\models" $targetDir -Recurse -Force
-        Write-Host "Models copied to target directory" -ForegroundColor Green
-    } else {
-        Write-Host "Warning: Models directory not found in package" -ForegroundColor Yellow
-    }
-
-    # Copy native libraries to target directory for runtime
-    Write-Host "Copying native libraries to target directory..." -ForegroundColor Yellow
-    $targetNativeLibs = "$targetDir\native-libs"
-    if (-not (Test-Path $targetNativeLibs)) {
-        New-Item -ItemType Directory -Path $targetNativeLibs -Force | Out-Null
-    }
-    Copy-Item "$buildDir\native-libs\*" $targetNativeLibs -Force
-    Write-Host "Native libraries copied to target directory" -ForegroundColor Green
-
-    Write-Host "Runtime dependencies copied successfully" -ForegroundColor Green
-    Write-Host ""
+# Copy models to target directory for runtime access
+Write-Host "Copying models to target directory..." -ForegroundColor Yellow
+if (Test-Path "$buildDir\models") {
+    Copy-Item "$buildDir\models" $mainTargetDir -Recurse -Force
+    Write-Host "Models copied to target directory" -ForegroundColor Green
+} else {
+    Write-Host "Warning: Models directory not found in package" -ForegroundColor Yellow
 }
+
+# Copy native libraries to target directory for runtime
+Write-Host "Copying native libraries to target directory..." -ForegroundColor Yellow
+$targetNativeLibs = "$mainTargetDir\native-libs"
+if (-not (Test-Path $targetNativeLibs)) {
+    New-Item -ItemType Directory -Path $targetNativeLibs -Force | Out-Null
+}
+Copy-Item "$buildDir\native-libs\*" $targetNativeLibs -Force
+Write-Host "Native libraries copied to target directory" -ForegroundColor Green
+
+Write-Host "Runtime dependencies copied successfully" -ForegroundColor Green
+Write-Host ""
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Green
 Write-Host "Build completed successfully!" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Green
 Write-Host ""
-if ($operationMode -ne "tauri-only") {
-    Write-Host "[OK] voipglot-win CLI built successfully using voipglot-core library" -ForegroundColor Green
-}
-if ($operationMode -ne "cli-only") {
-    Write-Host "[OK] voipglot-win Tauri GUI built successfully" -ForegroundColor Green
-}
+Write-Host "[OK] voipglot-win Tauri GUI built successfully" -ForegroundColor Green
 Write-Host "[OK] All dependencies resolved by Cargo" -ForegroundColor Green
 Write-Host "[OK] Runtime dependencies extracted and copied" -ForegroundColor Green
 Write-Host "[OK] Ready for runtime execution" -ForegroundColor Green
