@@ -32,11 +32,11 @@ enable_partial_results = true
 provider = "ct2"
 model_path = "resources/models/nllb-200-ct2"
 source_language = "eng_Latn"
-target_language = "eng_Latn"
+target_language = "spa_Latn"
 num_threads = 4
 device = "cpu"
-max_batch_size = 32
-beam_size = 4
+max_batch_size = 1
+beam_size = 5
 
 [tts]
 provider = "coqui"
