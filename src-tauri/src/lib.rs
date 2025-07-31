@@ -9,7 +9,7 @@ use tauri::{App, Manager};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::env;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tracing::{info, warn, error, debug};
 
 // Import voipglot_core
@@ -65,7 +65,7 @@ impl AppState {
             info!("Using configuration loaded from: {}", path);
         }
         
-        // Resolve model paths relative to the executable location
+        // Resolve model paths using platform-specific logic
         Self::resolve_model_paths(&mut config);
         
         Self {
@@ -75,8 +75,12 @@ impl AppState {
         }
     }
     
+    /// Resolve model paths using multiple strategies for robust path resolution
+    /// This handles both development and production environments
     fn resolve_model_paths(config: &mut PipelineConfig) {
-        // Get the executable directory
+        info!("Resolving model paths for Windows Tauri application");
+        
+        // Get the executable directory for logging
         let exe_path = std::env::current_exe().unwrap_or_else(|_| {
             warn!("Failed to get executable path, using current directory");
             std::env::current_dir().unwrap_or_else(|_| Path::new(".").to_path_buf())
@@ -84,33 +88,103 @@ impl AppState {
         let exe_dir = exe_path.parent().unwrap_or_else(|| Path::new("."));
         
         info!("Executable directory: {:?}", exe_dir);
+        info!("Current working directory: {:?}", std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
         
-        // Resolve STT model path (resources/models/...)
-        let stt_path = exe_dir.join(&config.stt.model_path);
-        if stt_path.exists() {
-            config.stt.model_path = stt_path.to_string_lossy().to_string();
+        // Resolve STT model path
+        if let Some(resolved_path) = Self::resolve_model_path(&config.stt.model_path, exe_dir) {
+            config.stt.model_path = resolved_path;
             info!("STT model path resolved to: {}", config.stt.model_path);
         } else {
-            warn!("STT model not found at: {:?}", stt_path);
+            warn!("STT model not found at: {}", config.stt.model_path);
         }
         
-        // Resolve translation model path (resources/models/...)
-        let translation_path = exe_dir.join(&config.translation.model_path);
-        if translation_path.exists() {
-            config.translation.model_path = translation_path.to_string_lossy().to_string();
+        // Resolve translation model path
+        if let Some(resolved_path) = Self::resolve_model_path(&config.translation.model_path, exe_dir) {
+            config.translation.model_path = resolved_path;
             info!("Translation model path resolved to: {}", config.translation.model_path);
         } else {
-            warn!("Translation model not found at: {:?}", translation_path);
+            warn!("Translation model not found at: {}", config.translation.model_path);
         }
         
-        // Resolve TTS model path (resources/models/...)
-        let tts_path = exe_dir.join(&config.tts.model_path);
-        if tts_path.exists() {
-            config.tts.model_path = tts_path.to_string_lossy().to_string();
+        // Resolve TTS model path
+        if let Some(resolved_path) = Self::resolve_model_path(&config.tts.model_path, exe_dir) {
+            config.tts.model_path = resolved_path;
             info!("TTS model path resolved to: {}", config.tts.model_path);
         } else {
-            warn!("TTS model not found at: {:?}", tts_path);
+            warn!("TTS model not found at: {}", config.tts.model_path);
         }
+    }
+    
+    /// Resolve a model path using multiple strategies
+    /// Returns the first valid path found, or None if no valid path exists
+    fn resolve_model_path(model_path: &str, exe_dir: &Path) -> Option<String> {
+        // Strategy 1: If it's already an absolute path, use it directly
+        if Path::new(model_path).is_absolute() {
+            if Path::new(model_path).exists() {
+                info!("Using absolute model path: {}", model_path);
+                return Some(model_path.to_string());
+            } else {
+                warn!("Absolute model path does not exist: {}", model_path);
+            }
+        }
+        
+        // Strategy 2: Try relative to current working directory
+        let current_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        let current_dir_path = current_dir.join(model_path);
+        if current_dir_path.exists() {
+            let resolved = current_dir_path.to_string_lossy().to_string();
+            info!("Model found relative to current directory: {} -> {}", model_path, resolved);
+            return Some(resolved);
+        }
+        
+        // Strategy 3: Try relative to executable directory
+        let exe_dir_path = exe_dir.join(model_path);
+        if exe_dir_path.exists() {
+            let resolved = exe_dir_path.to_string_lossy().to_string();
+            info!("Model found relative to executable directory: {} -> {}", model_path, resolved);
+            return Some(resolved);
+        }
+        
+        // Strategy 4: Try in resources directory relative to executable (for Tauri bundles)
+        let resources_path = exe_dir.join("resources").join(model_path);
+        if resources_path.exists() {
+            let resolved = resources_path.to_string_lossy().to_string();
+            info!("Model found in resources directory: {} -> {}", model_path, resolved);
+            return Some(resolved);
+        }
+        
+        // Strategy 5: Try in models directory relative to executable
+        let models_path = exe_dir.join("models").join(model_path);
+        if models_path.exists() {
+            let resolved = models_path.to_string_lossy().to_string();
+            info!("Model found in models directory: {} -> {}", model_path, resolved);
+            return Some(resolved);
+        }
+        
+        // Strategy 6: Try in parent directory (for development)
+        if let Some(parent) = exe_dir.parent() {
+            let parent_path = parent.join(model_path);
+            if parent_path.exists() {
+                let resolved = parent_path.to_string_lossy().to_string();
+                info!("Model found in parent directory: {} -> {}", model_path, resolved);
+                return Some(resolved);
+            }
+        }
+        
+        // Strategy 7: Try in grandparent directory (for development)
+        if let Some(parent) = exe_dir.parent() {
+            if let Some(grandparent) = parent.parent() {
+                let grandparent_path = grandparent.join(model_path);
+                if grandparent_path.exists() {
+                    let resolved = grandparent_path.to_string_lossy().to_string();
+                    info!("Model found in grandparent directory: {} -> {}", model_path, resolved);
+                    return Some(resolved);
+                }
+            }
+        }
+        
+        warn!("Model not found using any resolution strategy: {}", model_path);
+        None
     }
 }
 
